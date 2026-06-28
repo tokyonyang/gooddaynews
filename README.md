@@ -1,9 +1,10 @@
-# AdSense SEO 자동화 스타터 v11
+# AdSense SEO 자동화 스타터 v12
 
-트렌드 키워드를 수집하고, 텔레그램으로 **오늘의 핫이슈 / 오늘의 카드뉴스 / 오늘의 작성글 후보**를 보내는 자동화 패키지입니다.
+트렌드 키워드를 수집하고, 텔레그램으로 **오늘의 핫이슈 / 글로벌 경제 위험 알림 / 별도 추적 이슈 / 오늘의 카드뉴스 / 오늘의 작성글 후보**를 보내는 자동화 패키지입니다.
 
-## v11 핵심 변경
+## v12 핵심 변경
 
+- **글로벌 경제 위험 알림**을 추가해 전쟁·질병·환율·원자재·금리·시장루머·Reuters/Bloomberg성 속보를 별도 섹션으로 보냅니다.
 - 기존 Google 기반 수집에 **Naver Search API 뉴스 검색**을 추가했습니다.
 - 근거 기사 링크는 기본적으로 **네이버 뉴스 우선**으로 가져오고, 부족한 경우 Google News RSS로 보완합니다.
 - 네이버 뉴스 최신 제목을 후보 아이템으로 보강할 수 있습니다.
@@ -52,6 +53,15 @@ INCLUDE_SEED_KEYWORDS=false
 HOT_ISSUE_COUNT=10
 CARD_NEWS_COUNT=3
 ARTICLE_COUNT=3
+SPECIAL_ISSUES=
+SPECIAL_ISSUE_TITLE=📌 별도 추적 이슈
+SPECIAL_ISSUE_COUNT=5
+SPECIAL_ISSUE_CATEGORY_FILTER=all
+GLOBAL_MACRO_ALERT_ENABLED=true
+GLOBAL_MACRO_ALERT_TITLE=🌍 글로벌 경제 위험 알림
+GLOBAL_MACRO_ALERT_TOPICS=
+GLOBAL_MACRO_ALERT_COUNT=7
+GLOBAL_MACRO_ALERT_LOOKBACK_HOURS=24
 CATEGORY_FILTER=finance
 NEWS_PROVIDER=naver_first
 USE_NAVER_NEWS_CANDIDATES=true
@@ -68,6 +78,45 @@ USE_NAVER_DATALAB=true
 
 텔레그램 상단의 `자동 대체 검색 로그`에서 실제 사용된 단계를 확인할 수 있습니다.
 
+## 별도 추적 이슈 추가
+
+`SPECIAL_ISSUES`에 주제를 넣으면 **오늘의 핫이슈 TOP 10과 섞이지 않고**, 텔레그램 리포트 안에 별도 섹션으로 추가됩니다.
+
+예시:
+
+```text
+SPECIAL_ISSUES=국민연금 환율, 코스피 8000, 전기요금 동결
+SPECIAL_ISSUE_TITLE=📌 별도 추적 이슈
+SPECIAL_ISSUE_COUNT=5
+SPECIAL_ISSUE_CATEGORY_FILTER=all
+```
+
+자동 예약 실행에서도 유지하려면 GitHub 저장소의 `Settings → Secrets and variables → Actions → Variables`에 같은 이름으로 등록하면 됩니다. 수동 실행에서는 `Run workflow` 입력값으로도 임시 지정할 수 있습니다.
+
+## 글로벌 경제 위험 알림 추가
+
+`GLOBAL_MACRO_ALERT_ENABLED=true`이면 오늘의 핫이슈와 별도로 **시장 충격 가능성이 있는 글로벌 이슈**를 분리해서 보냅니다. 기본 추적 범위는 아래와 같습니다.
+
+- 전쟁·확전·지정학 리스크
+- 질병·감염병·팬데믹 위험
+- 원·달러 환율 급등락, 달러인덱스, 외환시장
+- 국제유가, 금, 구리, 곡물 등 원자재 급등락
+- 미국 기준금리, 연준/FOMC, 국채금리 급등락
+- 시장 루머·가십, 인수설·매각설·제재설
+- 로이터/블룸버그 속보성 글로벌 시장 기사
+
+기본 검색어를 그대로 쓰려면 `GLOBAL_MACRO_ALERT_TOPICS`를 비워두면 됩니다. 직접 조정하려면 아래처럼 입력하세요.
+
+```text
+GLOBAL_MACRO_ALERT_ENABLED=true
+GLOBAL_MACRO_ALERT_TITLE=🌍 글로벌 경제 위험 알림
+GLOBAL_MACRO_ALERT_TOPICS=로이터 속보 글로벌 경제 시장, 블룸버그 속보 글로벌 시장 경제, 원달러 환율 급등 급락, 국제유가 급등 급락, 미국 기준금리 연준 FOMC
+GLOBAL_MACRO_ALERT_COUNT=7
+GLOBAL_MACRO_ALERT_LOOKBACK_HOURS=24
+```
+
+텔레그램에서는 제목 앞에 `[전쟁·지정학]`, `[환율·달러]`, `[원자재·유가]`, `[금리·채권]`, `[시장루머·가십]` 같은 위험 태그가 붙습니다. 영문 Reuters/Bloomberg 제목은 오역을 피하기 위해 한국어 요약 제목과 원문 제목을 함께 표시합니다.
+
 ## 텔레그램 표시 예시
 
 ```text
@@ -77,6 +126,15 @@ USE_NAVER_DATALAB=true
 정렬 기준: 종합 관심도 순 = Google Trends 조회수 + 네이버 뉴스량 + 네이버 DataLab 상대지수
 근거자료 포함: 8/10개 항목
 근거자료는 네이버 뉴스 우선, 부족하면 Google News로 보완합니다.
+
+🌍 글로벌 경제 위험 알림
+대상: 전쟁·질병·환율·원자재·금리·시장루머 및 로이터/블룸버그 속보성 기사
+
+1. 💱 [환율·달러] 원·달러 환율 급등 관련 기사 제목
+출처: 로이터 / 시각: 06-28 09:15
+핵심영향: 수입물가·해외직구 원가·외국인 수급 영향
+근거자료:
+  1) 기사 제목 (언론사 · 06-28 09:15) / 링크1
 
 🔥 오늘의 핫이슈 TOP 10
 
@@ -88,25 +146,41 @@ USE_NAVER_DATALAB=true
 근거자료:
   1) 기사 제목 (언론사 · 06-26 08:31) / 링크1
   2) 기사 제목 (언론사 · 06-26 08:12) / 링크2
+
+📌 별도 추적 이슈
+
+1. [기타] 국민연금 환율
+관심도: 32,000점 / 근거강도: 보통
+근거자료:
+  1) 기사 제목 (언론사 · 06-26 11:20) / 링크1
 ```
 
 
 ## 자동 실행 일정
 
-GitHub Actions는 UTC 기준으로 동작하므로, 한국시간 기준 아래 4회 실행되도록 설정했습니다.
+GitHub Actions는 UTC 기준으로 동작하므로, 한국시간 기준 아래 7회 실행되도록 설정했습니다.
 
 | 한국시간(KST) | UTC cron 실행 시간 | 용도 예시 |
 |---|---:|---|
-| 오전 6시 | 전일 21:00 UTC | 출근 전 새벽/오전 이슈 확인 |
-| 오전 11시 | 02:00 UTC | 오전장·오전 뉴스 반영 |
-| 오후 3시 | 06:00 UTC | 장중/오후 이슈 반영 |
-| 오후 7시 | 10:00 UTC | 저녁 주요 이슈 정리 |
+| 오전 5:57 | 전일 20:57 UTC | 새벽 주요 이슈 확인 |
+| 오전 9:15 | 00:15 UTC | 출근 후 오전 이슈 확인 |
+| 오전 11:28 | 02:28 UTC | 오전장·오전 뉴스 반영 |
+| 오후 2:07 | 05:07 UTC | 점심 이후 이슈 반영 |
+| 오후 3:41 | 06:41 UTC | 장중/오후 이슈 반영 |
+| 오후 8:02 | 11:02 UTC | 저녁 주요 이슈 정리 |
+| 오후 10:03 | 13:03 UTC | 야간 마감 이슈 정리 |
 
 워크플로우 설정값:
 
 ```yaml
 schedule:
-  - cron: "0 2,6,10,21 * * *"
+  - cron: "57 20 * * *"
+  - cron: "15 0 * * *"
+  - cron: "28 2 * * *"
+  - cron: "7 5 * * *"
+  - cron: "41 6 * * *"
+  - cron: "2 11 * * *"
+  - cron: "3 13 * * *"
 ```
 
 ## GitHub Actions 수동 실행 옵션
@@ -116,6 +190,15 @@ schedule:
 | 옵션 | 기본값 | 설명 |
 |---|---:|---|
 | `topics` | 비움 | 특정 주제만 보고 싶을 때 쉼표/줄바꿈으로 입력 |
+| `special_issues` | 비움 | 오늘의 핫이슈와 별개로 고정 추적할 이슈 |
+| `special_issue_title` | `📌 별도 추적 이슈` | 별도 이슈 섹션 제목 |
+| `special_issue_count` | `5` | 별도 이슈 표시 개수 |
+| `special_issue_category_filter` | `all` | 별도 이슈 카테고리 필터 |
+| `global_macro_alert_enabled` | `true` | 글로벌 경제 위험 알림 사용 여부 |
+| `global_macro_alert_title` | `🌍 글로벌 경제 위험 알림` | 글로벌 위험 알림 섹션 제목 |
+| `global_macro_alert_topics` | 비움 | 비우면 기본 위험 키워드 묶음 사용. 직접 지정 가능 |
+| `global_macro_alert_count` | `7` | 글로벌 위험 알림 표시 개수 |
+| `global_macro_alert_lookback_hours` | `24` | 글로벌 위험 알림 최근 자료 기준 시간 |
 | `category_filter` | `finance` | 경제·금융 우선. `all`이면 전체 카테고리 |
 | `news_provider` | `naver_first` | 네이버 뉴스 우선. `google`이면 Google News만 사용 |
 | `use_naver_news_candidates` | `true` | 네이버 뉴스 최신 제목을 후보 아이템으로 보강 |
@@ -158,4 +241,6 @@ python main.py --max-keywords 30 --max-posts 10 --category-filter finance --look
 - `trend_keywords_raw_YYYYMMDD.csv`: 원본 수집 키워드
 - `trend_keywords_YYYYMMDD.csv`: 카테고리 필터 후 키워드
 - `idea_items_YYYYMMDD.json`: 후보 아이템과 근거 기사 전체 데이터
+- `special_issue_items_YYYYMMDD.json`: 별도 추적 이슈와 근거 기사 데이터
+- `global_macro_alert_items_YYYYMMDD.json`: 글로벌 경제 위험 알림과 근거 기사 데이터
 - `idea_items_YYYYMMDD.csv`: 순위, 관심도, 네이버 신호, 추천 용도, 근거 기사 링크 요약

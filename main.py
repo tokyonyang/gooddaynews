@@ -118,6 +118,63 @@ FINANCE_CATEGORY_IDS = [
     "policy_support",
 ]
 
+# -----------------------------------------------------------------------------
+# 글로벌 경제 위험 알림 기본값
+# -----------------------------------------------------------------------------
+# 오늘의 핫이슈와 섞지 않고 별도 섹션으로 보여줄 시장 충격형 이슈입니다.
+# GitHub Variables의 GLOBAL_MACRO_ALERT_TOPICS 값으로 운영 중 교체할 수 있습니다.
+GLOBAL_MACRO_DEFAULT_TOPICS = [
+    "로이터 속보 글로벌 경제 시장",
+    "블룸버그 속보 글로벌 시장 경제",
+    "전쟁 확전 지정학 리스크 유가",
+    "질병 감염병 WHO 팬데믹 경제",
+    "원달러 환율 급등 급락 외환시장",
+    "국제유가 급등 급락 OPEC 원유",
+    "원자재 급등 급락 금 구리 곡물",
+    "미국 기준금리 연준 FOMC 국채금리",
+    "달러인덱스 미국 국채금리 급등",
+    "시장 루머 가십 기업 인수합병 제재",
+    "미중 갈등 관세 제재 공급망",
+]
+
+GLOBAL_MACRO_RISK_RULES = OrderedDict({
+    "전쟁·지정학": [
+        "전쟁", "확전", "공습", "침공", "미사일", "휴전", "제재", "지정학", "중동", "호르무즈",
+        "우크라이나", "러시아", "이스라엘", "이란", "대만", "중국군", "war", "attack", "missile", "sanction",
+    ],
+    "질병·감염병": [
+        "질병", "감염병", "팬데믹", "전염병", "WHO", "코로나", "조류독감", "독감", "바이러스",
+        "disease", "pandemic", "virus", "outbreak",
+    ],
+    "환율·달러": [
+        "원달러", "원·달러", "환율", "달러", "외환", "달러인덱스", "DXY", "yen", "yuan", "currency", "forex",
+    ],
+    "원자재·유가": [
+        "원자재", "국제유가", "유가", "원유", "브렌트", "WTI", "OPEC", "금값", "금 가격", "구리",
+        "곡물", "밀", "쌀", "대두", "commodity", "oil", "gold", "copper", "grain",
+    ],
+    "금리·채권": [
+        "금리", "기준금리", "연준", "FOMC", "파월", "국채금리", "채권", "수익률", "긴축", "인하",
+        "rate", "fed", "fomc", "treasury", "yield",
+    ],
+    "시장루머·가십": [
+        "루머", "가십", "소문", "설", "인수설", "매각설", "합병설", "market talk", "rumor", "gossip",
+    ],
+    "글로벌속보": [
+        "로이터", "블룸버그", "reuters", "bloomberg", "속보", "breaking", "markets", "global economy",
+    ],
+})
+
+GLOBAL_MACRO_IMPACT_HINTS = {
+    "전쟁·지정학": "유가·금값·방산·해운·환율 변동 가능성",
+    "질병·감염병": "여행·항공·소비·공급망 위축 가능성",
+    "환율·달러": "수입물가·해외직구 원가·외국인 수급 영향",
+    "원자재·유가": "물가·운송비·식품/에너지 비용 영향",
+    "금리·채권": "대출금리·주식 밸류에이션·부동산 심리 영향",
+    "시장루머·가십": "단기 변동성 확대 가능성. 확인 전 과신 금지",
+    "글로벌속보": "글로벌 증시·환율·원자재 방향성 확인 필요",
+}
+
 
 
 def _env_true(name: str, default: str = "false") -> bool:
@@ -148,6 +205,175 @@ def _parse_topics(text: str) -> list[str]:
             seen.add(item)
             topics.append(item)
     return topics
+
+
+
+def _global_macro_topics_from_env(value: str) -> list[str]:
+    """글로벌 경제 위험 알림용 검색어를 반환합니다.
+
+    GLOBAL_MACRO_ALERT_TOPICS가 비어 있으면 기본 위험 키워드 묶음을 사용합니다.
+    """
+    topics = _parse_topics(value)
+    return topics or GLOBAL_MACRO_DEFAULT_TOPICS[:]
+
+
+def _contains_hangul(text: str) -> bool:
+    return bool(re.search(r"[가-힣]", str(text or "")))
+
+
+def _macro_risk_label(text: str) -> str:
+    haystack = str(text or "").lower()
+    best_label = "글로벌속보"
+    best_score = 0
+    for label, keywords in GLOBAL_MACRO_RISK_RULES.items():
+        score = 0
+        for kw in keywords:
+            needle = str(kw or "").lower()
+            if needle and needle in haystack:
+                score += max(1, len(needle))
+        if score > best_score:
+            best_label = label
+            best_score = score
+    return best_label
+
+
+def _macro_risk_emoji(label: str) -> str:
+    return {
+        "전쟁·지정학": "⚠️",
+        "질병·감염병": "🦠",
+        "환율·달러": "💱",
+        "원자재·유가": "🛢️",
+        "금리·채권": "🏦",
+        "시장루머·가십": "🗣️",
+        "글로벌속보": "🚨",
+    }.get(label, "🚨")
+
+
+def _macro_impact_hint(label: str) -> str:
+    return GLOBAL_MACRO_IMPACT_HINTS.get(label, GLOBAL_MACRO_IMPACT_HINTS["글로벌속보"])
+
+
+def _macro_source_label(article: dict) -> str:
+    text = f"{article.get('source', '')} {article.get('title', '')}"
+    lowered = text.lower()
+    labels = []
+    if "reuters" in lowered or "로이터" in text:
+        labels.append("로이터")
+    if "bloomberg" in lowered or "블룸버그" in text:
+        labels.append("블룸버그")
+    if labels:
+        return "/".join(labels)
+    return str(article.get("source") or "뉴스")
+
+
+def _macro_source_score(article: dict) -> int:
+    text = f"{article.get('source', '')} {article.get('title', '')}".lower()
+    score = 0
+    if "reuters" in text or "로이터" in text:
+        score += 350
+    if "bloomberg" in text or "블룸버그" in text:
+        score += 350
+    return score
+
+
+def _macro_urgency_score(text: str) -> int:
+    lowered = str(text or "").lower()
+    urgent_terms = [
+        "속보", "긴급", "급등", "급락", "폭등", "폭락", "확전", "공습", "제재", "쇼크", "위기",
+        "breaking", "surge", "plunge", "jump", "slump", "crisis", "shock",
+    ]
+    return sum(80 for term in urgent_terms if term in lowered)
+
+
+def _macro_alert_display_title(article: dict, topic: str, label: str) -> str:
+    """텔레그램에서 제목만 봐도 성격을 알 수 있게 한국어 제목을 만듭니다."""
+    original = clean_title = re.sub(r"\s+", " ", str(article.get("title") or "")).strip()
+    source_label = _macro_source_label(article)
+
+    # 한국어 제목이면 원 제목을 살리되 앞에 출처/위험 태그가 붙으므로 과도하게 손대지 않습니다.
+    if clean_title and _contains_hangul(clean_title):
+        return clean_title[:120]
+
+    # 영문 Reuters/Bloomberg 제목은 정확한 기계번역 API 없이 오역하지 않도록,
+    # 검색 주제와 위험 태그를 이용해 한국어 요약 제목으로 표시합니다.
+    topic_ko = re.sub(r"\s+", " ", str(topic or "글로벌 경제 속보")).strip()
+    topic_ko = re.sub(r"\b(Reuters|Bloomberg|breaking|markets|global economy)\b", "", topic_ko, flags=re.IGNORECASE).strip()
+    topic_ko = topic_ko or "글로벌 경제 속보"
+    return f"{source_label} 확인 필요: {topic_ko}"[:120]
+
+
+def _macro_alert_score(article: dict, topic: str, label: str) -> int:
+    text = f"{article.get('title', '')} {article.get('source', '')} {topic}"
+    score = _macro_source_score(article) + _macro_urgency_score(text)
+    # 최근일수록 위로 올립니다.
+    try:
+        age = float(article.get("age_hours", 999) or 999)
+    except Exception:
+        age = 999
+    if age <= 3:
+        score += 180
+    elif age <= 6:
+        score += 120
+    elif age <= 12:
+        score += 60
+    if label in {"전쟁·지정학", "환율·달러", "원자재·유가", "금리·채권"}:
+        score += 120
+    return score
+
+
+def _build_global_macro_alert_items(
+    enabled: bool,
+    topics: list[str],
+    geo: str,
+    links_per_topic: int,
+    lookback_hours: int,
+    max_items: int,
+) -> list[dict]:
+    """전쟁/질병/환율/원자재/금리/루머 등 글로벌 경제 충격 가능 이슈를 별도 섹션으로 구성합니다."""
+    if not enabled:
+        return []
+
+    rows: list[dict] = []
+    seen = set()
+    per_topic_limit = max(2, min(8, int(links_per_topic or 5)))
+
+    for topic in topics:
+        articles = fetch_related_news(
+            topic,
+            limit=per_topic_limit,
+            geo=geo,
+            category_hint="로이터 블룸버그 Reuters Bloomberg 속보 글로벌 경제 시장 환율 유가 금리 원자재",
+            lookback_hours=lookback_hours,
+        )
+        for article in articles:
+            title = str(article.get("title") or "").strip()
+            url = str(article.get("url") or "").strip()
+            key = re.sub(r"\s+", " ", title.lower()) or url
+            if not title or not url or key in seen:
+                continue
+            seen.add(key)
+            label = _macro_risk_label(f"{topic} {title} {article.get('source', '')}")
+            source_label = _macro_source_label(article)
+            display_title = _macro_alert_display_title(article, topic, label)
+            score = _macro_alert_score(article, topic, label)
+            rows.append({
+                "keyword": display_title,
+                "alert_title": display_title,
+                "original_title": title,
+                "query": topic,
+                "risk_label": label,
+                "risk_emoji": _macro_risk_emoji(label),
+                "market_impact": _macro_impact_hint(label),
+                "source_label": source_label,
+                "published": article.get("published", ""),
+                "published_at": article.get("published_at", ""),
+                "age_hours": article.get("age_hours", ""),
+                "score": score,
+                "news": [article],
+            })
+
+    rows.sort(key=lambda item: (_to_int(item.get("score")), str(item.get("published_at", ""))), reverse=True)
+    return rows[: max(0, int(max_items or 7))]
 
 
 
@@ -743,6 +969,37 @@ def _allowed_label(allowed_categories: list[str]) -> str:
 
 
 
+def _append_global_macro_alert_section(lines: list[str], items: list[dict] | None, title: str) -> None:
+    """전쟁/질병/환율/원자재/금리/루머 등 글로벌 경제 위험 알림 섹션을 추가합니다."""
+    if not items:
+        return
+
+    lines.append("\n{}".format(f"<b>{html_escape(title)}</b>"))
+    lines.append("대상: 전쟁·질병·환율·원자재·금리·시장루머 및 로이터/블룸버그 속보성 기사")
+    lines.append("표시방식: 제목 앞에 위험 태그를 붙여 제목만 봐도 성격을 알 수 있게 정리")
+
+    for idx, item in enumerate(items, 1):
+        risk_label = html_escape(item.get("risk_label") or "글로벌속보")
+        emoji = html_escape(item.get("risk_emoji") or "🚨")
+        headline = html_escape(item.get("alert_title") or item.get("keyword") or "글로벌 경제 속보")
+        source = html_escape(item.get("source_label") or "뉴스")
+        published = html_escape(item.get("published") or "")
+        impact = html_escape(item.get("market_impact") or "글로벌 시장 영향 확인 필요")
+        original_title = str(item.get("original_title") or "").strip()
+
+        lines.append(f"\n<b>{idx}. {emoji} [{risk_label}] {headline}</b>")
+        meta = f"출처: <b>{source}</b>"
+        if published:
+            meta += f" / 시각: {published}"
+        lines.append(meta)
+        lines.append(f"핵심영향: {impact}")
+        if original_title and original_title != item.get("alert_title"):
+            lines.append(f"원문제목: {html_escape(original_title[:160])}")
+        lines.append("근거자료:")
+        lines.append(_news_links_html(item.get("news") or [], limit=1))
+
+
+
 def _daily_digest_to_telegram_text(
     items: list[dict],
     allowed_categories: list[str],
@@ -751,13 +1008,19 @@ def _daily_digest_to_telegram_text(
     article_count: int,
     lookback_hours: int = 24,
     fallback_info: list[dict] | None = None,
+    special_issue_items: list[dict] | None = None,
+    special_issue_title: str = "📌 별도 추적 이슈",
+    global_macro_alert_items: list[dict] | None = None,
+    global_macro_alert_title: str = "🌍 글로벌 경제 위험 알림",
 ) -> str:
     """최종 운영용 텔레그램 리포트입니다.
 
     구성:
     1) 오늘의 핫이슈: 전체 후보를 조회수 많은 순으로 정리
-    2) 오늘의 카드뉴스: 카드뉴스 제작 추천 항목
-    3) 오늘의 작성글: 블로그/워드프레스 작성 추천 항목
+    2) 글로벌 경제 위험 알림: 전쟁/질병/환율/원자재/금리/루머/Reuters/Bloomberg성 속보
+    3) 별도 추적 이슈: 사용자가 지정한 고정 추적 주제
+    4) 오늘의 카드뉴스: 카드뉴스 제작 추천 항목
+    5) 오늘의 작성글: 블로그/워드프레스 작성 추천 항목
     """
     evidence_items_count = sum(1 for item in items if len(item.get("news") or []) > 0)
     lines = [
@@ -781,6 +1044,21 @@ def _daily_digest_to_telegram_text(
 
     if not items:
         lines.append("\n수집된 작성 후보가 없습니다. 카테고리 필터 또는 선택 주제를 확인해주세요.")
+        _append_global_macro_alert_section(lines, global_macro_alert_items, global_macro_alert_title)
+        if special_issue_items:
+            lines.append("\n{}".format(f"<b>{html_escape(special_issue_title)}</b>"))
+            for idx, item in enumerate(special_issue_items, 1):
+                keyword = html_escape(item.get("keyword") or "")
+                category = html_escape(item.get("category_label") or "")
+                interest = html_escape(item.get("interest_label") or _interest_label(item.get("composite_score")))
+                evidence = html_escape(item.get("evidence_strength") or "")
+                angle = html_escape(item.get("angle") or "")
+                lines.append(f"\n<b>{idx}. [{category}] {keyword}</b>")
+                lines.append(f"관심도: <b>{interest}</b> / 근거강도: {evidence}")
+                if angle:
+                    lines.append(f"작성각도: {angle}")
+                lines.append("근거자료:")
+                lines.append(_news_links_html(item.get("news") or []))
         return "\n".join(lines)
 
     ranked_items = sorted(items, key=_rank_sort_key, reverse=True)
@@ -809,6 +1087,27 @@ def _daily_digest_to_telegram_text(
             lines.append(f"작성각도: {angle}")
         lines.append("근거자료:")
         lines.append(_news_links_html(item.get("news") or []))
+
+    _append_global_macro_alert_section(lines, global_macro_alert_items, global_macro_alert_title)
+
+    if special_issue_items:
+        lines.append("\n{}".format(f"<b>{html_escape(special_issue_title)}</b>"))
+        for idx, item in enumerate(special_issue_items, 1):
+            keyword = html_escape(item.get("keyword") or "")
+            category = html_escape(item.get("category_label") or "")
+            interest = html_escape(item.get("interest_label") or _interest_label(item.get("composite_score")))
+            naver_news_count = _to_int(item.get("naver_news_count", 0))
+            datalab_score = float(item.get("naver_datalab_score", 0) or 0)
+            evidence = html_escape(item.get("evidence_strength") or "")
+            angle = html_escape(item.get("angle") or "")
+            lines.append(f"\n<b>{idx}. [{category}] {keyword}</b>")
+            lines.append(f"관심도: <b>{interest}</b> / 근거강도: {evidence}")
+            if naver_news_count or datalab_score:
+                lines.append(f"네이버 신호: 최근뉴스 {naver_news_count}건 / DataLab {datalab_score:.1f}")
+            if angle:
+                lines.append(f"작성각도: {angle}")
+            lines.append("근거자료:")
+            lines.append(_news_links_html(item.get("news") or []))
 
     lines.append("\n🃏 <b>오늘의 카드뉴스 추천</b>")
     if not card_items:
@@ -855,6 +1154,39 @@ def _ideas_to_telegram_text(items: list[dict], allowed_categories: list[str]) ->
 
 
 
+def _build_special_issue_items(
+    topics: list[str],
+    geo: str,
+    links_per_topic: int,
+    lookback_hours: int,
+    category_filter: str = "all",
+    max_items: int = 5,
+) -> list[dict]:
+    """오늘의 핫이슈와 별개로 사용자가 지정한 추적 이슈를 구성합니다.
+
+    SPECIAL_ISSUES에 지정한 주제는 트렌드 순위 후보와 섞지 않고 별도 섹션으로만 표시합니다.
+    """
+    if not topics:
+        return []
+
+    allowed_categories = _parse_category_filter(category_filter or "all")
+    manual_keywords = _keyword_dataframe_from_topics(topics)
+    prepared = _prepare_keywords_with_categories(manual_keywords, allowed_categories)
+
+    # 지정 주제가 카테고리 필터 때문에 모두 빠지면, 사용자가 의도한 추적 주제를 살리기 위해 전체 카테고리로 재시도합니다.
+    if prepared.empty and allowed_categories != list(CATEGORY_GROUPS.keys()):
+        prepared = _prepare_keywords_with_categories(manual_keywords, list(CATEGORY_GROUPS.keys()))
+
+    items = _build_idea_digest(
+        prepared,
+        max_items=max(1, int(max_items or 5)),
+        links_per_topic=links_per_topic,
+        geo=geo,
+        lookback_hours=lookback_hours,
+    )
+    return sorted(items, key=_rank_sort_key, reverse=True)
+
+
 def main():
     load_dotenv()
     parser = argparse.ArgumentParser()
@@ -889,6 +1221,15 @@ def main():
     hot_issue_count = max(1, _safe_int_env("HOT_ISSUE_COUNT", args.max_posts))
     card_news_count = max(0, _safe_int_env("CARD_NEWS_COUNT", 3))
     article_count = max(0, _safe_int_env("ARTICLE_COUNT", 3))
+    special_issue_topics = _parse_topics(os.environ.get("SPECIAL_ISSUES", ""))
+    special_issue_title = os.environ.get("SPECIAL_ISSUE_TITLE", "📌 별도 추적 이슈").strip() or "📌 별도 추적 이슈"
+    special_issue_count = max(1, _safe_int_env("SPECIAL_ISSUE_COUNT", 5))
+    special_issue_category_filter = os.environ.get("SPECIAL_ISSUE_CATEGORY_FILTER", "all")
+    global_macro_alert_enabled = _env_true("GLOBAL_MACRO_ALERT_ENABLED", "true")
+    global_macro_alert_title = os.environ.get("GLOBAL_MACRO_ALERT_TITLE", "🌍 글로벌 경제 위험 알림").strip() or "🌍 글로벌 경제 위험 알림"
+    global_macro_alert_topics = _global_macro_topics_from_env(os.environ.get("GLOBAL_MACRO_ALERT_TOPICS", ""))
+    global_macro_alert_count = max(1, _safe_int_env("GLOBAL_MACRO_ALERT_COUNT", 7))
+    global_macro_alert_lookback_hours = max(1, _safe_int_env("GLOBAL_MACRO_ALERT_LOOKBACK_HOURS", _safe_int_env("LOOKBACK_HOURS", args.lookback_hours)))
     allowed_categories = _parse_category_filter(args.category_filter)
     include_seed_keywords = _env_true("INCLUDE_SEED_KEYWORDS", "false") or args.include_seed_keywords
     auto_fallback = _env_true("AUTO_FALLBACK", "true")
@@ -920,6 +1261,32 @@ def main():
             json.dumps(items, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        special_issue_items = _build_special_issue_items(
+            topics=special_issue_topics,
+            geo=args.geo,
+            links_per_topic=links_per_topic,
+            lookback_hours=effective_lookback_hours,
+            category_filter=special_issue_category_filter,
+            max_items=special_issue_count,
+        )
+        if special_issue_items:
+            Path(f"reports/special_issue_items_{today}.json").write_text(
+                json.dumps(special_issue_items, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        global_macro_alert_items = _build_global_macro_alert_items(
+            enabled=global_macro_alert_enabled,
+            topics=global_macro_alert_topics,
+            geo=args.geo,
+            links_per_topic=links_per_topic,
+            lookback_hours=global_macro_alert_lookback_hours,
+            max_items=global_macro_alert_count,
+        )
+        if global_macro_alert_items:
+            Path(f"reports/global_macro_alert_items_{today}.json").write_text(
+                json.dumps(global_macro_alert_items, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         flat_rows = []
         card_keywords = {item.get("keyword") for item in _select_card_news_items(items[:hot_issue_count], card_news_count)}
         article_keywords = {item.get("keyword") for item in _select_article_items(items[:hot_issue_count], article_count)}
@@ -961,6 +1328,10 @@ def main():
                 article_count,
                 effective_lookback_hours,
                 fallback_info=fallback_info,
+                special_issue_items=special_issue_items,
+                special_issue_title=special_issue_title,
+                global_macro_alert_items=global_macro_alert_items,
+                global_macro_alert_title=global_macro_alert_title,
             ),
             parse_mode="HTML",
         )
