@@ -315,3 +315,63 @@ python main.py --max-keywords 30 --max-posts 10 --category-filter finance --look
 - `special_issue_items_YYYYMMDD.json`: 별도 추적 이슈와 근거 기사 데이터
 - `global_macro_alert_items_YYYYMMDD.json`: 글로벌 경제 위험 알림과 근거 기사 데이터
 - `idea_items_YYYYMMDD.csv`: 순위, 관심도, 네이버 신호, 추천 용도, 근거 기사 링크 요약
+
+## 텔레그램에서 주제 입력 → 맞춤 리포트 재전송
+
+`telegram-topic-listener.yml` 워크플로우가 추가되었습니다. 텔레그램에 특정 주제를 보내면 다음 실행 시점에 아래 내용을 별도 리포트로 다시 보냅니다.
+
+- 관련 핫이슈 TOP 5
+- 관련 키워드
+- 카드뉴스 후보
+- 카드뉴스 스크립트
+- 작성글 후보
+- 근거 기사 링크
+- 주제와 연관된 글로벌 속보 보강
+
+### 사용 예시
+
+텔레그램 채널/방에 아래처럼 입력하세요.
+
+```text
+/topic 원달러 환율
+```
+
+또는 한국어로 입력해도 됩니다.
+
+```text
+주제: 엔비디아 실적
+토픽 트럼프 관세
+핫이슈 국제유가 급등
+```
+
+기본값에서는 `/topic`, `주제:`, `토픽`, `핫이슈` 같은 명령형 메시지만 처리합니다. 일반 문장도 전부 주제로 처리하고 싶으면 GitHub Variables에 아래 값을 추가하세요.
+
+```text
+TELEGRAM_TOPIC_ACCEPT_PLAIN=true
+```
+
+처음 운영할 때는 오작동 방지를 위해 `false`를 권장합니다.
+
+### GitHub Variables 권장값
+
+`Settings → Secrets and variables → Actions → Variables`에 필요하면 아래 값을 추가하세요.
+
+```text
+TELEGRAM_TOPIC_ACCEPT_PLAIN=false
+TELEGRAM_TOPIC_LOOKBACK_HOURS=48
+TELEGRAM_TOPIC_NEWS_LINKS=8
+TELEGRAM_TOPIC_INCLUDE_GLOBAL_BREAKING=true
+TELEGRAM_TOPIC_GLOBAL_BREAKING_COUNT=3
+TELEGRAM_TOPIC_MAX_UPDATES=20
+```
+
+특정 채팅방/채널에서 온 메시지만 처리하려면 아래 값을 추가합니다. 비워두면 `TELEGRAM_CHAT_ID`를 기준으로 제한합니다.
+
+```text
+TELEGRAM_TOPIC_ALLOWED_CHAT_IDS=-1001234567890
+```
+
+### 실행 방식
+
+GitHub Actions는 텔레그램 메시지를 실시간으로 항상 듣고 있는 서버가 아니기 때문에, 이 패키지는 `telegram-topic-listener.yml`을 약 10분 간격으로 실행해 새 메시지를 확인합니다. 더 빠른 실시간 반응이 필요하면 같은 `telegram_topic_listener.py` 로직을 Railway/Vercel/Cloudflare Workers 같은 webhook 서버로 옮기는 방식이 좋습니다.
+
