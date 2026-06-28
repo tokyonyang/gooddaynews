@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 # Make repository root importable when Vercel executes this file from /api.
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
