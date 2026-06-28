@@ -1,6 +1,6 @@
 name: daily-adsense-seo
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       topics:
@@ -8,43 +8,27 @@ on:
         required: false
         default: ""
       special_issues:
-        description: "오늘의 핫이슈와 별개로 고정 추적할 별도 이슈. 쉼표 또는 줄바꿈으로 구분"
+        description: "오늘의 핫이슈와 별개로 고정 추적할 별도 이슈"
         required: false
         default: ""
-      special_issue_title:
-        description: "별도 이슈 섹션 제목"
+      category_filter:
+        description: "카테고리 필터. finance=경제 중심, all=전체"
         required: false
-        default: "📌 별도 추적 이슈"
-      special_issue_count:
-        description: "별도 이슈 섹션에 보여줄 최대 항목 수"
+        default: "finance"
+      news_provider:
+        description: "근거 기사 출처. naver_first, google, mixed"
         required: false
-        default: "5"
-      special_issue_category_filter:
-        description: "별도 이슈 카테고리 필터. 기본 all=전체"
-        required: false
-        default: "all"
-      global_macro_alert_enabled:
-        description: "전쟁/질병/환율/원자재/금리/루머 등 글로벌 경제 위험 알림 섹션 사용"
+        default: "naver_first"
+      item_list_only:
+        description: "글 초안 없이 후보/기사 링크만 텔레그램 전송"
         required: false
         default: "true"
         type: choice
         options:
           - "true"
           - "false"
-      global_macro_alert_title:
-        description: "글로벌 경제 위험 알림 섹션 제목"
-        required: false
-        default: "🌍 글로벌 경제 위험 알림"
-      global_macro_alert_topics:
-        description: "글로벌 위험 알림 검색어. 비우면 기본 묶음 사용. 쉼표 또는 줄바꿈 구분"
-        required: false
-        default: ""
-      global_macro_alert_count:
-        description: "글로벌 경제 위험 알림에 보여줄 최대 항목 수"
-        required: false
-        default: "7"
-      global_macro_alert_lookback_hours:
-        description: "글로벌 경제 위험 알림 최근 자료 기준 시간"
+      lookback_hours:
+        description: "최근 자료 기준 시간"
         required: false
         default: "24"
       global_breaking_news_enabled:
@@ -55,116 +39,16 @@ on:
         options:
           - "true"
           - "false"
-      global_breaking_news_title:
-        description: "글로벌 속보 섹션 제목"
-        required: false
-        default: "🚨 글로벌 속보 TOP 3"
-      global_breaking_news_count:
-        description: "글로벌 속보 섹션에 보여줄 최신 기사 수"
-        required: false
-        default: "3"
-      global_breaking_news_lookback_hours:
-        description: "글로벌 속보 최근 자료 기준 시간"
-        required: false
-        default: "24"
-      global_breaking_news_use_direct_sites:
-        description: "Google News RSS가 부족할 때 실제 뉴스/기관 RSS 보조 확인"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
       global_breaking_news_queries:
-        description: "글로벌 속보 검색어. 비우면 Reuters/Bloomberg/시장 기본 묶음 사용"
+        description: "글로벌 속보 검색어. 비우면 Variables/기본값 사용"
         required: false
         default: ""
       global_breaking_social_feeds:
-        description: "영향력 인물 SNS/RSS/Atom feed. 이름|URL 형식, 쉼표 또는 줄바꿈 구분"
+        description: "영향력 인물 SNS/RSS/Atom feed. 이름|URL 형식"
         required: false
         default: ""
-      category_filter:
-        description: "카테고리 필터. 기본 finance=경제·금융/증권/부동산/정책지원, all=전체, 또는 economy_finance,stock_investment 직접 입력"
-        required: false
-        default: "finance"
-      news_provider:
-        description: "근거 기사 출처. naver_first=네이버 우선, google=구글뉴스만, mixed=네이버+구글"
-        required: false
-        default: "naver_first"
-      use_naver_news_candidates:
-        description: "네이버 뉴스 최신 제목을 후보 아이템으로 보강"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      use_naver_datalab:
-        description: "네이버 DataLab 상대 검색지수로 순위 보정"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      item_list_only:
-        description: "글 초안 생성 없이 작성 후보 + 관련 기사 링크만 텔레그램 전송"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      news_links_per_topic:
-        description: "주제별 관련 신문 기사 링크 수"
-        required: false
-        default: "5"
-      lookback_hours:
-        description: "최근 자료 기준 시간. 기본 24=최근 24시간"
-        required: false
-        default: "24"
-      auto_fallback:
-        description: "후보/근거가 부족하면 전체 카테고리 → 48시간으로 자동 확장"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      fallback_lookback_hours:
-        description: "자동 확장 시 최종 시간 범위. 기본 48시간"
-        required: false
-        default: "48"
-      include_seed_keywords:
-        description: "최근 트렌드가 부족할 때 seed 키워드까지 포함"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-      hot_issue_count:
-        description: "오늘의 핫이슈에 보여줄 항목 수"
-        required: false
-        default: "10"
-      card_news_count:
-        description: "오늘의 카드뉴스 추천 항목 수"
-        required: false
-        default: "3"
-      article_count:
-        description: "오늘의 작성글 추천 항목 수"
-        required: false
-        default: "3"
       telegram_only:
-        description: "item_list_only=false일 때 WordPress 업로드 없이 텔레그램으로만 글 초안 전송"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-      send_articles_to_telegram:
-        description: "item_list_only=false일 때 생성된 글 본문을 텔레그램으로 별도 전송"
+        description: "item_list_only=false일 때 워드프레스 업로드 없이 텔레그램으로만 전송"
         required: false
         default: "false"
         type: choice
@@ -214,9 +98,9 @@ jobs:
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          NEWS_PROVIDER: ${{ inputs.news_provider || 'naver_first' }}
-          USE_NAVER_NEWS_CANDIDATES: ${{ inputs.use_naver_news_candidates || 'true' }}
-          USE_NAVER_DATALAB: ${{ inputs.use_naver_datalab || 'true' }}
+          NEWS_PROVIDER: ${{ github.event.inputs.news_provider || vars.NEWS_PROVIDER || 'naver_first' }}
+          USE_NAVER_NEWS_CANDIDATES: ${{ vars.USE_NAVER_NEWS_CANDIDATES || 'true' }}
+          USE_NAVER_DATALAB: ${{ vars.USE_NAVER_DATALAB || 'true' }}
           WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
           WP_API_URL: ${{ secrets.WP_API_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
@@ -226,39 +110,48 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SITE_DESCRIPTION: ${{ vars.SITE_DESCRIPTION }}
           GOOGLE_TRENDS_GEO: KR
-          SELECTED_TOPICS: ${{ inputs.topics || '' }}
-          SPECIAL_ISSUES: ${{ inputs.special_issues || vars.SPECIAL_ISSUES || '' }}
-          SPECIAL_ISSUE_TITLE: ${{ inputs.special_issue_title || vars.SPECIAL_ISSUE_TITLE || '📌 별도 추적 이슈' }}
-          SPECIAL_ISSUE_COUNT: ${{ inputs.special_issue_count || vars.SPECIAL_ISSUE_COUNT || '5' }}
-          SPECIAL_ISSUE_CATEGORY_FILTER: ${{ inputs.special_issue_category_filter || vars.SPECIAL_ISSUE_CATEGORY_FILTER || 'all' }}
-          GLOBAL_MACRO_ALERT_ENABLED: ${{ inputs.global_macro_alert_enabled || vars.GLOBAL_MACRO_ALERT_ENABLED || 'true' }}
-          GLOBAL_MACRO_ALERT_TITLE: ${{ inputs.global_macro_alert_title || vars.GLOBAL_MACRO_ALERT_TITLE || '🌍 글로벌 경제 위험 알림' }}
-          GLOBAL_MACRO_ALERT_TOPICS: ${{ inputs.global_macro_alert_topics || vars.GLOBAL_MACRO_ALERT_TOPICS || '' }}
-          GLOBAL_MACRO_ALERT_COUNT: ${{ inputs.global_macro_alert_count || vars.GLOBAL_MACRO_ALERT_COUNT || '7' }}
-          GLOBAL_MACRO_ALERT_LOOKBACK_HOURS: ${{ inputs.global_macro_alert_lookback_hours || vars.GLOBAL_MACRO_ALERT_LOOKBACK_HOURS || '24' }}
-          GLOBAL_BREAKING_NEWS_ENABLED: ${{ inputs.global_breaking_news_enabled || vars.GLOBAL_BREAKING_NEWS_ENABLED || 'true' }}
-          GLOBAL_BREAKING_NEWS_TITLE: ${{ inputs.global_breaking_news_title || vars.GLOBAL_BREAKING_NEWS_TITLE || '🚨 글로벌 속보 TOP 3' }}
-          GLOBAL_BREAKING_NEWS_COUNT: ${{ inputs.global_breaking_news_count || vars.GLOBAL_BREAKING_NEWS_COUNT || '3' }}
-          GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS: ${{ inputs.global_breaking_news_lookback_hours || vars.GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS || '24' }}
-          GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES: ${{ inputs.global_breaking_news_use_direct_sites || vars.GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES || 'true' }}
-          GLOBAL_BREAKING_NEWS_QUERIES: ${{ inputs.global_breaking_news_queries || vars.GLOBAL_BREAKING_NEWS_QUERIES || '' }}
-          GLOBAL_BREAKING_SOCIAL_FEEDS: ${{ inputs.global_breaking_social_feeds || vars.GLOBAL_BREAKING_SOCIAL_FEEDS || '' }}
-          CATEGORY_FILTER: ${{ inputs.category_filter || 'finance' }}
-          ITEM_LIST_ONLY: ${{ inputs.item_list_only || 'true' }}
-          NEWS_LINKS_PER_TOPIC: ${{ inputs.news_links_per_topic || '5' }}
-          LOOKBACK_HOURS: ${{ inputs.lookback_hours || '24' }}
-          AUTO_FALLBACK: ${{ inputs.auto_fallback || 'true' }}
-          FALLBACK_LOOKBACK_HOURS: ${{ inputs.fallback_lookback_hours || '48' }}
-          INCLUDE_SEED_KEYWORDS: ${{ inputs.include_seed_keywords || 'false' }}
-          HOT_ISSUE_COUNT: ${{ inputs.hot_issue_count || '10' }}
-          CARD_NEWS_COUNT: ${{ inputs.card_news_count || '3' }}
-          ARTICLE_COUNT: ${{ inputs.article_count || '3' }}
-          TELEGRAM_ONLY: ${{ inputs.telegram_only || 'false' }}
-          SEND_ARTICLES_TO_TELEGRAM: ${{ inputs.send_articles_to_telegram || 'false' }}
-          SEND_ARTICLE_ON_WP_FAIL: false
+
+          SELECTED_TOPICS: ${{ github.event.inputs.topics || vars.SELECTED_TOPICS || '' }}
+          SPECIAL_ISSUES: ${{ github.event.inputs.special_issues || vars.SPECIAL_ISSUES || '' }}
+          SPECIAL_ISSUE_TITLE: ${{ vars.SPECIAL_ISSUE_TITLE || '📌 별도 추적 이슈' }}
+          SPECIAL_ISSUE_COUNT: ${{ vars.SPECIAL_ISSUE_COUNT || '5' }}
+          SPECIAL_ISSUE_CATEGORY_FILTER: ${{ vars.SPECIAL_ISSUE_CATEGORY_FILTER || 'all' }}
+
+          GLOBAL_MACRO_ALERT_ENABLED: ${{ vars.GLOBAL_MACRO_ALERT_ENABLED || 'true' }}
+          GLOBAL_MACRO_ALERT_TITLE: ${{ vars.GLOBAL_MACRO_ALERT_TITLE || '🌍 글로벌 경제 위험 알림' }}
+          GLOBAL_MACRO_ALERT_TOPICS: ${{ vars.GLOBAL_MACRO_ALERT_TOPICS || '' }}
+          GLOBAL_MACRO_ALERT_COUNT: ${{ vars.GLOBAL_MACRO_ALERT_COUNT || '7' }}
+          GLOBAL_MACRO_ALERT_LOOKBACK_HOURS: ${{ vars.GLOBAL_MACRO_ALERT_LOOKBACK_HOURS || '24' }}
+
+          GLOBAL_BREAKING_NEWS_ENABLED: ${{ github.event.inputs.global_breaking_news_enabled || vars.GLOBAL_BREAKING_NEWS_ENABLED || 'true' }}
+          GLOBAL_BREAKING_NEWS_TITLE: ${{ vars.GLOBAL_BREAKING_NEWS_TITLE || '🚨 글로벌 속보 TOP 3' }}
+          GLOBAL_BREAKING_NEWS_COUNT: ${{ vars.GLOBAL_BREAKING_NEWS_COUNT || '3' }}
+          GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS: ${{ vars.GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS || '24' }}
+          GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES: ${{ vars.GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES || 'true' }}
+          GLOBAL_BREAKING_NEWS_QUERIES: ${{ github.event.inputs.global_breaking_news_queries || vars.GLOBAL_BREAKING_NEWS_QUERIES || '' }}
+          GLOBAL_BREAKING_SOCIAL_FEEDS: ${{ github.event.inputs.global_breaking_social_feeds || vars.GLOBAL_BREAKING_SOCIAL_FEEDS || '' }}
+
+          CATEGORY_FILTER: ${{ github.event.inputs.category_filter || vars.CATEGORY_FILTER || 'finance' }}
+          ITEM_LIST_ONLY: ${{ github.event.inputs.item_list_only || vars.ITEM_LIST_ONLY || 'true' }}
+          NEWS_LINKS_PER_TOPIC: ${{ vars.NEWS_LINKS_PER_TOPIC || '5' }}
+          LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || vars.LOOKBACK_HOURS || '24' }}
+          AUTO_FALLBACK: ${{ vars.AUTO_FALLBACK || 'true' }}
+          FALLBACK_LOOKBACK_HOURS: ${{ vars.FALLBACK_LOOKBACK_HOURS || '48' }}
+          INCLUDE_SEED_KEYWORDS: ${{ vars.INCLUDE_SEED_KEYWORDS || 'false' }}
+          HOT_ISSUE_COUNT: ${{ vars.HOT_ISSUE_COUNT || '10' }}
+          CARD_NEWS_COUNT: ${{ vars.CARD_NEWS_COUNT || '3' }}
+          ARTICLE_COUNT: ${{ vars.ARTICLE_COUNT || '3' }}
+          TELEGRAM_ONLY: ${{ github.event.inputs.telegram_only || vars.TELEGRAM_ONLY || 'false' }}
+          SEND_ARTICLES_TO_TELEGRAM: ${{ vars.SEND_ARTICLES_TO_TELEGRAM || 'false' }}
+          SEND_ARTICLE_ON_WP_FAIL: "false"
           # true로 바꾸면 iPhone, GPT 같은 영어 키워드도 허용합니다.
-          ALLOW_ENGLISH_KEYWORDS: false
-        run: python main.py --max-keywords 30 --max-posts 10 --category-filter "${{ inputs.category_filter || 'finance' }}" --lookback-hours "${{ inputs.lookback_hours || '24' }}"
+          ALLOW_ENGLISH_KEYWORDS: "false"
+        run: >
+          python main.py
+          --max-keywords 30
+          --max-posts 10
+          --category-filter "$CATEGORY_FILTER"
+          --lookback-hours "$LOOKBACK_HOURS"
 
       - name: Upload reports
         if: always()
