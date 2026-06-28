@@ -375,3 +375,51 @@ TELEGRAM_TOPIC_ALLOWED_CHAT_IDS=-1001234567890
 
 GitHub Actions는 텔레그램 메시지를 실시간으로 항상 듣고 있는 서버가 아니기 때문에, 이 패키지는 `telegram-topic-listener.yml`을 약 10분 간격으로 실행해 새 메시지를 확인합니다. 더 빠른 실시간 반응이 필요하면 같은 `telegram_topic_listener.py` 로직을 Railway/Vercel/Cloudflare Workers 같은 webhook 서버로 옮기는 방식이 좋습니다.
 
+
+## 텔레그램 주제 입력 실시간 응답: Vercel Webhook 방식
+
+이 패키지는 텔레그램에 주제를 입력하면 즉시 Vercel 함수가 받아서 관련 리포트를 다시 보내는 webhook 방식을 지원합니다.
+
+```text
+Telegram → Vercel /api/telegram_webhook → 주제 분석 리포트 → Telegram 재전송
+```
+
+기존 10분 폴링용 `telegram-topic-listener.yml` 워크플로우는 webhook과 충돌할 수 있어 제거했습니다. 자세한 설정 순서는 `README_VERCEL_WEBHOOK.md`를 확인하세요.
+
+### 사용 예시
+
+```text
+/topic 원달러 환율
+/topic 국제유가 급등
+주제: 엔비디아 실적
+핫이슈 트럼프 관세
+```
+
+### Vercel 필수 환경변수
+
+```text
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+GEMINI_API_KEY
+TELEGRAM_WEBHOOK_SECRET
+```
+
+### Webhook 등록
+
+GitHub Actions에서 아래 워크플로우를 수동 실행합니다.
+
+```text
+Actions → telegram-webhook-control → Run workflow → action=set
+```
+
+`TELEGRAM_WEBHOOK_URL`에는 Vercel 주소를 넣습니다.
+
+```text
+https://YOUR_PROJECT.vercel.app
+```
+
+등록 후 실제 Telegram webhook endpoint는 아래가 됩니다.
+
+```text
+https://YOUR_PROJECT.vercel.app/api/telegram_webhook
+```
