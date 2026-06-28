@@ -15,7 +15,7 @@ from trend_sources import collect_keywords
 from content_generator import generate_article
 from wp_publisher import create_wp_post
 from telegram_notify import send_telegram, send_telegram_long, html_escape
-from news_sources import fetch_related_news
+from news_sources import fetch_related_news, fetch_global_breaking_news
 
 try:
     from naver_sources import fetch_naver_datalab_score, fetch_naver_news_signal, naver_enabled
@@ -969,6 +969,81 @@ def _allowed_label(allowed_categories: list[str]) -> str:
 
 
 
+def _breaking_emoji(label: str) -> str:
+    return {
+        "전쟁·지정학": "⚠️",
+        "질병·감염병": "🦠",
+        "환율·달러": "💱",
+        "원자재·유가": "🛢️",
+        "금리·채권": "🏦",
+        "무역·관세": "🚢",
+        "금융시장": "📉",
+        "기업·빅테크": "🏢",
+        "영향력 인물 발언/SNS": "📣",
+        "글로벌경제": "🚨",
+    }.get(str(label or ""), "🚨")
+
+
+def _breaking_provider_label(provider: str) -> str:
+    return {
+        "google_news": "Google News RSS",
+        "news_site_rss": "실제 뉴스 사이트 RSS",
+        "official_feed": "공식 기관 피드",
+        "custom_social_or_feed": "SNS/사용자 지정 피드",
+    }.get(str(provider or ""), str(provider or "뉴스"))
+
+
+def _breaking_display_title(article: dict) -> str:
+    """제목만 봐도 성격을 알 수 있도록 한국어 표시 제목을 만듭니다."""
+    original = re.sub(r"\s+", " ", str(article.get("title") or "")).strip()
+    if original and _contains_hangul(original):
+        return original[:130]
+    label = str(article.get("impact_label") or "글로벌경제")
+    source = str(article.get("source") or "글로벌 뉴스")
+    reason = str(article.get("impact_reason") or "글로벌 경제·시장 영향 확인 필요")
+    return f"{source} 속보: {label} 이슈 — {reason}"[:130]
+
+
+def _append_global_breaking_news_section(
+    lines: list[str],
+    items: list[dict] | None,
+    title: str,
+    lookback_hours: int,
+) -> None:
+    """경제 영향 가능 글로벌 속보 최신 3개 섹션을 추가합니다."""
+    if not items:
+        return
+
+    lines.append("\n{}".format(f"<b>{html_escape(title)}</b>"))
+    lines.append(f"기준: 최근 <b>{int(lookback_hours)}시간</b> 이내 / 경제영향 필터 통과 기사 중 <b>발행시각 최신순</b>")
+    lines.append("보조수집: Google News RSS가 부족하면 실제 뉴스 사이트·공식기관 RSS·사용자 지정 SNS/RSS 피드를 함께 확인")
+
+    for idx, article in enumerate(items, 1):
+        label = html_escape(article.get("impact_label") or "글로벌경제")
+        emoji = html_escape(_breaking_emoji(article.get("impact_label") or ""))
+        headline = html_escape(_breaking_display_title(article))
+        source = html_escape(article.get("source") or "뉴스")
+        published = html_escape(article.get("published") or "")
+        provider = html_escape(_breaking_provider_label(article.get("provider") or ""))
+        reason = html_escape(article.get("impact_reason") or "글로벌 경제·시장 영향 확인 필요")
+        original_title = str(article.get("title") or "").strip()
+        display_title = _breaking_display_title(article)
+        url = str(article.get("url") or "").strip()
+
+        lines.append(f"\n<b>{idx}. {emoji} [{label}] {headline}</b>")
+        meta = f"출처: <b>{source}</b> / 수집: {provider}"
+        if published:
+            meta += f" / 발행: {published}"
+        lines.append(meta)
+        lines.append(f"경제영향: {reason}")
+        if original_title and original_title != display_title:
+            lines.append(f"원문제목: {html_escape(original_title[:180])}")
+        if url.startswith(("http://", "https://")):
+            lines.append(f"근거자료: <a href=\"{_html_attr(url)}\">링크1</a>")
+        else:
+            lines.append("근거자료: 링크 없음")
+
+
 def _append_global_macro_alert_section(lines: list[str], items: list[dict] | None, title: str) -> None:
     """전쟁/질병/환율/원자재/금리/루머 등 글로벌 경제 위험 알림 섹션을 추가합니다."""
     if not items:
@@ -1010,6 +1085,9 @@ def _daily_digest_to_telegram_text(
     fallback_info: list[dict] | None = None,
     special_issue_items: list[dict] | None = None,
     special_issue_title: str = "📌 별도 추적 이슈",
+    global_breaking_news_items: list[dict] | None = None,
+    global_breaking_news_title: str = "🚨 글로벌 속보 TOP 3",
+    global_breaking_news_lookback_hours: int = 24,
     global_macro_alert_items: list[dict] | None = None,
     global_macro_alert_title: str = "🌍 글로벌 경제 위험 알림",
 ) -> str:
@@ -1017,10 +1095,11 @@ def _daily_digest_to_telegram_text(
 
     구성:
     1) 오늘의 핫이슈: 전체 후보를 조회수 많은 순으로 정리
-    2) 글로벌 경제 위험 알림: 전쟁/질병/환율/원자재/금리/루머/Reuters/Bloomberg성 속보
-    3) 별도 추적 이슈: 사용자가 지정한 고정 추적 주제
-    4) 오늘의 카드뉴스: 카드뉴스 제작 추천 항목
-    5) 오늘의 작성글: 블로그/워드프레스 작성 추천 항목
+    2) 글로벌 속보 TOP 3: 경제 영향 가능 글로벌 기사/SNS 게시물 최신 발행순
+    3) 글로벌 경제 위험 알림: 전쟁/질병/환율/원자재/금리/루머/Reuters/Bloomberg성 속보
+    4) 별도 추적 이슈: 사용자가 지정한 고정 추적 주제
+    5) 오늘의 카드뉴스: 카드뉴스 제작 추천 항목
+    6) 오늘의 작성글: 블로그/워드프레스 작성 추천 항목
     """
     evidence_items_count = sum(1 for item in items if len(item.get("news") or []) > 0)
     lines = [
@@ -1044,6 +1123,7 @@ def _daily_digest_to_telegram_text(
 
     if not items:
         lines.append("\n수집된 작성 후보가 없습니다. 카테고리 필터 또는 선택 주제를 확인해주세요.")
+        _append_global_breaking_news_section(lines, global_breaking_news_items, global_breaking_news_title, global_breaking_news_lookback_hours)
         _append_global_macro_alert_section(lines, global_macro_alert_items, global_macro_alert_title)
         if special_issue_items:
             lines.append("\n{}".format(f"<b>{html_escape(special_issue_title)}</b>"))
@@ -1088,6 +1168,7 @@ def _daily_digest_to_telegram_text(
         lines.append("근거자료:")
         lines.append(_news_links_html(item.get("news") or []))
 
+    _append_global_breaking_news_section(lines, global_breaking_news_items, global_breaking_news_title, global_breaking_news_lookback_hours)
     _append_global_macro_alert_section(lines, global_macro_alert_items, global_macro_alert_title)
 
     if special_issue_items:
@@ -1230,6 +1311,13 @@ def main():
     global_macro_alert_topics = _global_macro_topics_from_env(os.environ.get("GLOBAL_MACRO_ALERT_TOPICS", ""))
     global_macro_alert_count = max(1, _safe_int_env("GLOBAL_MACRO_ALERT_COUNT", 7))
     global_macro_alert_lookback_hours = max(1, _safe_int_env("GLOBAL_MACRO_ALERT_LOOKBACK_HOURS", _safe_int_env("LOOKBACK_HOURS", args.lookback_hours)))
+    global_breaking_news_enabled = _env_true("GLOBAL_BREAKING_NEWS_ENABLED", "true")
+    global_breaking_news_title = os.environ.get("GLOBAL_BREAKING_NEWS_TITLE", "🚨 글로벌 속보 TOP 3").strip() or "🚨 글로벌 속보 TOP 3"
+    global_breaking_news_count = max(1, _safe_int_env("GLOBAL_BREAKING_NEWS_COUNT", 3))
+    global_breaking_news_lookback_hours = max(1, _safe_int_env("GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS", _safe_int_env("LOOKBACK_HOURS", args.lookback_hours)))
+    global_breaking_news_use_direct_sites = _env_true("GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES", "true")
+    global_breaking_news_queries = _parse_topics(os.environ.get("GLOBAL_BREAKING_NEWS_QUERIES", ""))
+    global_breaking_social_feeds = os.environ.get("GLOBAL_BREAKING_SOCIAL_FEEDS", "")
     allowed_categories = _parse_category_filter(args.category_filter)
     include_seed_keywords = _env_true("INCLUDE_SEED_KEYWORDS", "false") or args.include_seed_keywords
     auto_fallback = _env_true("AUTO_FALLBACK", "true")
@@ -1274,6 +1362,22 @@ def main():
                 json.dumps(special_issue_items, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+        global_breaking_news_items = []
+        if global_breaking_news_enabled:
+            global_breaking_news_items = fetch_global_breaking_news(
+                limit=global_breaking_news_count,
+                geo=args.geo,
+                lookback_hours=global_breaking_news_lookback_hours,
+                queries=global_breaking_news_queries or None,
+                use_direct_sites=global_breaking_news_use_direct_sites,
+                social_feeds=global_breaking_social_feeds,
+            )
+            if global_breaking_news_items:
+                Path(f"reports/global_breaking_news_{today}.json").write_text(
+                    json.dumps(global_breaking_news_items, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+
         global_macro_alert_items = _build_global_macro_alert_items(
             enabled=global_macro_alert_enabled,
             topics=global_macro_alert_topics,
@@ -1330,6 +1434,9 @@ def main():
                 fallback_info=fallback_info,
                 special_issue_items=special_issue_items,
                 special_issue_title=special_issue_title,
+                global_breaking_news_items=global_breaking_news_items,
+                global_breaking_news_title=global_breaking_news_title,
+                global_breaking_news_lookback_hours=global_breaking_news_lookback_hours,
                 global_macro_alert_items=global_macro_alert_items,
                 global_macro_alert_title=global_macro_alert_title,
             ),

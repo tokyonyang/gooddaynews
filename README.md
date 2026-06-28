@@ -1,6 +1,6 @@
 # AdSense SEO 자동화 스타터 v12
 
-트렌드 키워드를 수집하고, 텔레그램으로 **오늘의 핫이슈 / 글로벌 경제 위험 알림 / 별도 추적 이슈 / 오늘의 카드뉴스 / 오늘의 작성글 후보**를 보내는 자동화 패키지입니다.
+트렌드 키워드를 수집하고, 텔레그램으로 **오늘의 핫이슈 / 글로벌 속보 TOP 3 / 글로벌 경제 위험 알림 / 별도 추적 이슈 / 오늘의 카드뉴스 / 오늘의 작성글 후보**를 보내는 자동화 패키지입니다.
 
 ## v12 핵심 변경
 
@@ -62,6 +62,13 @@ GLOBAL_MACRO_ALERT_TITLE=🌍 글로벌 경제 위험 알림
 GLOBAL_MACRO_ALERT_TOPICS=
 GLOBAL_MACRO_ALERT_COUNT=7
 GLOBAL_MACRO_ALERT_LOOKBACK_HOURS=24
+GLOBAL_BREAKING_NEWS_ENABLED=true
+GLOBAL_BREAKING_NEWS_TITLE=🚨 글로벌 속보 TOP 3
+GLOBAL_BREAKING_NEWS_COUNT=3
+GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS=24
+GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES=true
+GLOBAL_BREAKING_NEWS_QUERIES=
+GLOBAL_BREAKING_SOCIAL_FEEDS=
 CATEGORY_FILTER=finance
 NEWS_PROVIDER=naver_first
 USE_NAVER_NEWS_CANDIDATES=true
@@ -92,6 +99,55 @@ SPECIAL_ISSUE_CATEGORY_FILTER=all
 ```
 
 자동 예약 실행에서도 유지하려면 GitHub 저장소의 `Settings → Secrets and variables → Actions → Variables`에 같은 이름으로 등록하면 됩니다. 수동 실행에서는 `Run workflow` 입력값으로도 임시 지정할 수 있습니다.
+
+## 글로벌 속보 TOP 3 추가
+
+`GLOBAL_BREAKING_NEWS_ENABLED=true`이면 오늘의 핫이슈와 별도로 **경제 영향 가능성이 있는 글로벌 속보 3개**를 최신 발행순으로 보냅니다.
+
+핵심 차이:
+
+- `오늘의 핫이슈`: 국내 트렌드/관심도 중심
+- `🌍 글로벌 경제 위험 알림`: 전쟁·질병·환율·원자재·금리 등 위험 테마별 추적
+- `🚨 글로벌 속보 TOP 3`: 경제영향 필터를 통과한 기사/SNS 게시물 중 **가장 최근 발행된 3개만** 별도 표시
+
+기본 수집 방식은 아래 순서입니다.
+
+1. Google News RSS에서 Reuters/Bloomberg/시장 속보성 검색어 확인
+2. Google News RSS가 부족할 때 AP/BBC/CNBC/Federal Reserve/WHO 등 실제 뉴스·공식기관 RSS 후보 보조 확인
+3. `GLOBAL_BREAKING_SOCIAL_FEEDS`에 사용자가 넣은 SNS/RSS/Atom feed가 있으면 함께 확인
+
+설정 예시:
+
+```text
+GLOBAL_BREAKING_NEWS_ENABLED=true
+GLOBAL_BREAKING_NEWS_TITLE=🚨 글로벌 속보 TOP 3
+GLOBAL_BREAKING_NEWS_COUNT=3
+GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS=24
+GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES=true
+GLOBAL_BREAKING_NEWS_QUERIES=
+GLOBAL_BREAKING_SOCIAL_FEEDS=
+```
+
+영향력 있는 인물의 SNS 글을 추가하려면, 공개 RSS/Atom feed 또는 RSS 변환 URL을 아래처럼 넣을 수 있습니다.
+
+```text
+GLOBAL_BREAKING_SOCIAL_FEEDS=Elon Musk|https://example.com/elon/rss, Fed Chair|https://example.com/powell/rss
+```
+
+주의: X, Threads, Truth Social 같은 SNS는 공식 API/로그인/유료 권한이 필요한 경우가 많습니다. 이 자동화는 기본적으로 공개 RSS/Atom 또는 사용자가 제공한 feed URL을 읽는 방식입니다.
+
+텔레그램 표시 예시:
+
+```text
+🚨 글로벌 속보 TOP 3
+기준: 최근 24시간 이내 / 경제영향 필터 통과 기사 중 발행시각 최신순
+
+1. 🛢️ [원자재·유가] CNBC 속보: 원자재·유가 이슈 — 물가·운송비·에너지·식품 원가 변동 가능성
+출처: CNBC / 수집: 실제 뉴스 사이트 RSS / 발행: 06-28 09:15
+경제영향: 물가·운송비·에너지·식품 원가 변동 가능성
+원문제목: Oil prices rise after...
+근거자료: 링크1
+```
 
 ## 글로벌 경제 위험 알림 추가
 
@@ -126,6 +182,14 @@ GLOBAL_MACRO_ALERT_LOOKBACK_HOURS=24
 정렬 기준: 종합 관심도 순 = Google Trends 조회수 + 네이버 뉴스량 + 네이버 DataLab 상대지수
 근거자료 포함: 8/10개 항목
 근거자료는 네이버 뉴스 우선, 부족하면 Google News로 보완합니다.
+
+🚨 글로벌 속보 TOP 3
+기준: 최근 24시간 이내 / 경제영향 필터 통과 기사 중 발행시각 최신순
+
+1. 🏦 [금리·채권] Federal Reserve 속보: 금리·채권 이슈 — 대출금리·채권금리·주식 밸류에이션·부동산 심리 영향
+출처: Federal Reserve / 수집: 공식 기관 피드 / 발행: 06-28 08:30
+경제영향: 대출금리·채권금리·주식 밸류에이션·부동산 심리 영향
+근거자료: 링크1
 
 🌍 글로벌 경제 위험 알림
 대상: 전쟁·질병·환율·원자재·금리·시장루머 및 로이터/블룸버그 속보성 기사
@@ -199,6 +263,13 @@ schedule:
 | `global_macro_alert_topics` | 비움 | 비우면 기본 위험 키워드 묶음 사용. 직접 지정 가능 |
 | `global_macro_alert_count` | `7` | 글로벌 위험 알림 표시 개수 |
 | `global_macro_alert_lookback_hours` | `24` | 글로벌 위험 알림 최근 자료 기준 시간 |
+| `global_breaking_news_enabled` | `true` | 글로벌 속보 TOP 3 사용 여부 |
+| `global_breaking_news_title` | `🚨 글로벌 속보 TOP 3` | 글로벌 속보 섹션 제목 |
+| `global_breaking_news_count` | `3` | 글로벌 속보 표시 개수 |
+| `global_breaking_news_lookback_hours` | `24` | 글로벌 속보 최근 자료 기준 시간 |
+| `global_breaking_news_use_direct_sites` | `true` | Google News RSS 부족 시 실제 뉴스/공식 RSS 보조 확인 |
+| `global_breaking_news_queries` | 비움 | 비우면 기본 Reuters/Bloomberg/시장 속보 묶음 사용 |
+| `global_breaking_social_feeds` | 비움 | 영향력 인물 SNS/RSS/Atom feed. `이름|URL` 형식 |
 | `category_filter` | `finance` | 경제·금융 우선. `all`이면 전체 카테고리 |
 | `news_provider` | `naver_first` | 네이버 뉴스 우선. `google`이면 Google News만 사용 |
 | `use_naver_news_candidates` | `true` | 네이버 뉴스 최신 제목을 후보 아이템으로 보강 |
