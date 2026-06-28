@@ -1,0 +1,166 @@
+name: daily-adsense-seo
+
+on:
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: "선택 주제. 쉼표 또는 줄바꿈으로 구분. 비우면 트렌드 키워드 자동 수집"
+        required: false
+        default: ""
+      category_filter:
+        description: "카테고리 필터. 기본 finance=경제·금융/증권/부동산/정책지원, all=전체, 또는 economy_finance,stock_investment 직접 입력"
+        required: false
+        default: "finance"
+      news_provider:
+        description: "근거 기사 출처. naver_first=네이버 우선, google=구글뉴스만, mixed=네이버+구글"
+        required: false
+        default: "naver_first"
+      use_naver_news_candidates:
+        description: "네이버 뉴스 최신 제목을 후보 아이템으로 보강"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      use_naver_datalab:
+        description: "네이버 DataLab 상대 검색지수로 순위 보정"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      item_list_only:
+        description: "글 초안 생성 없이 작성 후보 + 관련 기사 링크만 텔레그램 전송"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      news_links_per_topic:
+        description: "주제별 관련 신문 기사 링크 수"
+        required: false
+        default: "5"
+      lookback_hours:
+        description: "최근 자료 기준 시간. 기본 24=최근 24시간"
+        required: false
+        default: "24"
+      auto_fallback:
+        description: "후보/근거가 부족하면 전체 카테고리 → 48시간으로 자동 확장"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      fallback_lookback_hours:
+        description: "자동 확장 시 최종 시간 범위. 기본 48시간"
+        required: false
+        default: "48"
+      include_seed_keywords:
+        description: "최근 트렌드가 부족할 때 seed 키워드까지 포함"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      hot_issue_count:
+        description: "오늘의 핫이슈에 보여줄 항목 수"
+        required: false
+        default: "10"
+      card_news_count:
+        description: "오늘의 카드뉴스 추천 항목 수"
+        required: false
+        default: "3"
+      article_count:
+        description: "오늘의 작성글 추천 항목 수"
+        required: false
+        default: "3"
+      telegram_only:
+        description: "item_list_only=false일 때 WordPress 업로드 없이 텔레그램으로만 글 초안 전송"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      send_articles_to_telegram:
+        description: "item_list_only=false일 때 생성된 글 본문을 텔레그램으로 별도 전송"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    # 하루 4회 자동 실행 (GitHub Actions cron은 UTC 기준)
+    # 06:00 KST = 21:00 UTC(전일), 11:00 KST = 02:00 UTC
+    # 15:00 KST = 06:00 UTC, 19:00 KST = 10:00 UTC
+    - cron: "0 2,6,10,21 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  daily-adsense-seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate SEO item report
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          NEWS_PROVIDER: ${{ inputs.news_provider || 'naver_first' }}
+          USE_NAVER_NEWS_CANDIDATES: ${{ inputs.use_naver_news_candidates || 'true' }}
+          USE_NAVER_DATALAB: ${{ inputs.use_naver_datalab || 'true' }}
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_API_URL: ${{ secrets.WP_API_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WP_DEFAULT_STATUS: draft
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SITE_DESCRIPTION: ${{ vars.SITE_DESCRIPTION }}
+          GOOGLE_TRENDS_GEO: KR
+          SELECTED_TOPICS: ${{ inputs.topics || '' }}
+          CATEGORY_FILTER: ${{ inputs.category_filter || 'finance' }}
+          ITEM_LIST_ONLY: ${{ inputs.item_list_only || 'true' }}
+          NEWS_LINKS_PER_TOPIC: ${{ inputs.news_links_per_topic || '5' }}
+          LOOKBACK_HOURS: ${{ inputs.lookback_hours || '24' }}
+          AUTO_FALLBACK: ${{ inputs.auto_fallback || 'true' }}
+          FALLBACK_LOOKBACK_HOURS: ${{ inputs.fallback_lookback_hours || '48' }}
+          INCLUDE_SEED_KEYWORDS: ${{ inputs.include_seed_keywords || 'false' }}
+          HOT_ISSUE_COUNT: ${{ inputs.hot_issue_count || '10' }}
+          CARD_NEWS_COUNT: ${{ inputs.card_news_count || '3' }}
+          ARTICLE_COUNT: ${{ inputs.article_count || '3' }}
+          TELEGRAM_ONLY: ${{ inputs.telegram_only || 'false' }}
+          SEND_ARTICLES_TO_TELEGRAM: ${{ inputs.send_articles_to_telegram || 'false' }}
+          SEND_ARTICLE_ON_WP_FAIL: false
+          # true로 바꾸면 iPhone, GPT 같은 영어 키워드도 허용합니다.
+          ALLOW_ENGLISH_KEYWORDS: false
+        run: python main.py --max-keywords 30 --max-posts 10 --category-filter "${{ inputs.category_filter || 'finance' }}" --lookback-hours "${{ inputs.lookback_hours || '24' }}"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adsense-seo-reports
+          path: reports/*
+          retention-days: 30
