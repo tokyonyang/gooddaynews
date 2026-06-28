@@ -1,0 +1,16 @@
+[project]
+name = "gooddaynews-vercel-webhook"
+version = "0.1.0"
+description = "Telegram webhook for Gooddaynews"
+requires-python = ">=3.12"
+dependencies = [
+  "requests>=2.32.0",
+  "python-dotenv>=1.0.1",
+  "feedparser>=6.0.11",
+  "google-genai>=1.0.0",
+  "beautifulsoup4>=4.12.0",
+  "python-slugify>=8.0.4"
+]
+
+[tool.vercel]
+entrypoint = "api.telegram_webhook:handler"
