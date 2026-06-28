@@ -7,6 +7,46 @@ on:
         description: "선택 주제. 쉼표 또는 줄바꿈으로 구분. 비우면 트렌드 키워드 자동 수집"
         required: false
         default: ""
+      special_issues:
+        description: "오늘의 핫이슈와 별개로 고정 추적할 별도 이슈. 쉼표 또는 줄바꿈으로 구분"
+        required: false
+        default: ""
+      special_issue_title:
+        description: "별도 이슈 섹션 제목"
+        required: false
+        default: "📌 별도 추적 이슈"
+      special_issue_count:
+        description: "별도 이슈 섹션에 보여줄 최대 항목 수"
+        required: false
+        default: "5"
+      special_issue_category_filter:
+        description: "별도 이슈 카테고리 필터. 기본 all=전체"
+        required: false
+        default: "all"
+      global_macro_alert_enabled:
+        description: "전쟁/질병/환율/원자재/금리/루머 등 글로벌 경제 위험 알림 섹션 사용"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      global_macro_alert_title:
+        description: "글로벌 경제 위험 알림 섹션 제목"
+        required: false
+        default: "🌍 글로벌 경제 위험 알림"
+      global_macro_alert_topics:
+        description: "글로벌 위험 알림 검색어. 비우면 기본 묶음 사용. 쉼표 또는 줄바꿈 구분"
+        required: false
+        default: ""
+      global_macro_alert_count:
+        description: "글로벌 경제 위험 알림에 보여줄 최대 항목 수"
+        required: false
+        default: "7"
+      global_macro_alert_lookback_hours:
+        description: "글로벌 경제 위험 알림 최근 자료 기준 시간"
+        required: false
+        default: "24"
       category_filter:
         description: "카테고리 필터. 기본 finance=경제·금융/증권/부동산/정책지원, all=전체, 또는 economy_finance,stock_investment 직접 입력"
         required: false
@@ -151,6 +191,15 @@ jobs:
           SITE_DESCRIPTION: ${{ vars.SITE_DESCRIPTION }}
           GOOGLE_TRENDS_GEO: KR
           SELECTED_TOPICS: ${{ inputs.topics || '' }}
+          SPECIAL_ISSUES: ${{ inputs.special_issues || vars.SPECIAL_ISSUES || '' }}
+          SPECIAL_ISSUE_TITLE: ${{ inputs.special_issue_title || vars.SPECIAL_ISSUE_TITLE || '📌 별도 추적 이슈' }}
+          SPECIAL_ISSUE_COUNT: ${{ inputs.special_issue_count || vars.SPECIAL_ISSUE_COUNT || '5' }}
+          SPECIAL_ISSUE_CATEGORY_FILTER: ${{ inputs.special_issue_category_filter || vars.SPECIAL_ISSUE_CATEGORY_FILTER || 'all' }}
+          GLOBAL_MACRO_ALERT_ENABLED: ${{ inputs.global_macro_alert_enabled || vars.GLOBAL_MACRO_ALERT_ENABLED || 'true' }}
+          GLOBAL_MACRO_ALERT_TITLE: ${{ inputs.global_macro_alert_title || vars.GLOBAL_MACRO_ALERT_TITLE || '🌍 글로벌 경제 위험 알림' }}
+          GLOBAL_MACRO_ALERT_TOPICS: ${{ inputs.global_macro_alert_topics || vars.GLOBAL_MACRO_ALERT_TOPICS || '' }}
+          GLOBAL_MACRO_ALERT_COUNT: ${{ inputs.global_macro_alert_count || vars.GLOBAL_MACRO_ALERT_COUNT || '7' }}
+          GLOBAL_MACRO_ALERT_LOOKBACK_HOURS: ${{ inputs.global_macro_alert_lookback_hours || vars.GLOBAL_MACRO_ALERT_LOOKBACK_HOURS || '24' }}
           CATEGORY_FILTER: ${{ inputs.category_filter || 'finance' }}
           ITEM_LIST_ONLY: ${{ inputs.item_list_only || 'true' }}
           NEWS_LINKS_PER_TOPIC: ${{ inputs.news_links_per_topic || '5' }}
