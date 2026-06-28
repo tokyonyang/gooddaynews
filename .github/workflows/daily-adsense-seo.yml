@@ -47,6 +47,42 @@ on:
         description: "글로벌 경제 위험 알림 최근 자료 기준 시간"
         required: false
         default: "24"
+      global_breaking_news_enabled:
+        description: "경제 영향 가능 글로벌 속보 TOP 3 섹션 사용"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      global_breaking_news_title:
+        description: "글로벌 속보 섹션 제목"
+        required: false
+        default: "🚨 글로벌 속보 TOP 3"
+      global_breaking_news_count:
+        description: "글로벌 속보 섹션에 보여줄 최신 기사 수"
+        required: false
+        default: "3"
+      global_breaking_news_lookback_hours:
+        description: "글로벌 속보 최근 자료 기준 시간"
+        required: false
+        default: "24"
+      global_breaking_news_use_direct_sites:
+        description: "Google News RSS가 부족할 때 실제 뉴스/기관 RSS 보조 확인"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      global_breaking_news_queries:
+        description: "글로벌 속보 검색어. 비우면 Reuters/Bloomberg/시장 기본 묶음 사용"
+        required: false
+        default: ""
+      global_breaking_social_feeds:
+        description: "영향력 인물 SNS/RSS/Atom feed. 이름|URL 형식, 쉼표 또는 줄바꿈 구분"
+        required: false
+        default: ""
       category_filter:
         description: "카테고리 필터. 기본 finance=경제·금융/증권/부동산/정책지원, all=전체, 또는 economy_finance,stock_investment 직접 입력"
         required: false
@@ -200,6 +236,13 @@ jobs:
           GLOBAL_MACRO_ALERT_TOPICS: ${{ inputs.global_macro_alert_topics || vars.GLOBAL_MACRO_ALERT_TOPICS || '' }}
           GLOBAL_MACRO_ALERT_COUNT: ${{ inputs.global_macro_alert_count || vars.GLOBAL_MACRO_ALERT_COUNT || '7' }}
           GLOBAL_MACRO_ALERT_LOOKBACK_HOURS: ${{ inputs.global_macro_alert_lookback_hours || vars.GLOBAL_MACRO_ALERT_LOOKBACK_HOURS || '24' }}
+          GLOBAL_BREAKING_NEWS_ENABLED: ${{ inputs.global_breaking_news_enabled || vars.GLOBAL_BREAKING_NEWS_ENABLED || 'true' }}
+          GLOBAL_BREAKING_NEWS_TITLE: ${{ inputs.global_breaking_news_title || vars.GLOBAL_BREAKING_NEWS_TITLE || '🚨 글로벌 속보 TOP 3' }}
+          GLOBAL_BREAKING_NEWS_COUNT: ${{ inputs.global_breaking_news_count || vars.GLOBAL_BREAKING_NEWS_COUNT || '3' }}
+          GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS: ${{ inputs.global_breaking_news_lookback_hours || vars.GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS || '24' }}
+          GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES: ${{ inputs.global_breaking_news_use_direct_sites || vars.GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES || 'true' }}
+          GLOBAL_BREAKING_NEWS_QUERIES: ${{ inputs.global_breaking_news_queries || vars.GLOBAL_BREAKING_NEWS_QUERIES || '' }}
+          GLOBAL_BREAKING_SOCIAL_FEEDS: ${{ inputs.global_breaking_social_feeds || vars.GLOBAL_BREAKING_SOCIAL_FEEDS || '' }}
           CATEGORY_FILTER: ${{ inputs.category_filter || 'finance' }}
           ITEM_LIST_ONLY: ${{ inputs.item_list_only || 'true' }}
           NEWS_LINKS_PER_TOPIC: ${{ inputs.news_links_per_topic || '5' }}
