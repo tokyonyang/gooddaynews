@@ -1,6 +1,11 @@
-# Gooddaynews Vercel Webhook Flask Diagnostic
+# Gooddaynews Telegram Webhook
 
-Set Vercel Root Directory to `vercel-webhook`.
+Vercel Root Directory: `vercel-webhook`
 
-GET `/api/telegram_webhook` should show `version: flask-diagnostic-2026-06-29-02`.
-Send `/ping` to the bot. It should reply immediately.
+Endpoint: `/api/telegram_webhook`
+
+Test commands:
+
+- `/ping`
+- `/topic 원달러 환율`
+- `주제: 엔비디아 실적`
