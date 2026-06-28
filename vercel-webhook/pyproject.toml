@@ -4,8 +4,9 @@ version = "0.1.0"
 description = "Telegram webhook diagnostic endpoint for Gooddaynews"
 requires-python = ">=3.12"
 dependencies = [
+  "flask>=3.0.0",
   "requests>=2.32.0"
 ]
 
 [tool.vercel]
-entrypoint = "api.telegram_webhook:handler"
+entrypoint = "api.telegram_webhook:app"
