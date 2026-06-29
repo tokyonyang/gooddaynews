@@ -1,9 +1,13 @@
 {
-  "version": 2,
+  "crons": [
+    {
+      "path": "/api/morning-briefing",
+      "schedule": "30 22 * * *"
+    }
+  ],
   "functions": {
-    "api/**/*.py": {
-      "maxDuration": 60,
-      "excludeFiles": "{__pycache__/**,**/*.pyc,reports/**,*.zip,.git/**}"
+    "api/*.js": {
+      "maxDuration": 60
     }
   }
 }
