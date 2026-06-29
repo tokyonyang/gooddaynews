@@ -145,7 +145,7 @@ jobs:
           SEND_ARTICLES_TO_TELEGRAM: ${{ vars.SEND_ARTICLES_TO_TELEGRAM || 'false' }}
           SEND_ARTICLE_ON_WP_FAIL: "false"
           # true로 바꾸면 iPhone, GPT 같은 영어 키워드도 허용합니다.
-          ALLOW_ENGLISH_KEYWORDS: "false"
+          ALLOW_ENGLISH_KEYWORDS: "true"
         run: >
           python main.py
           --max-keywords 30
