@@ -18,7 +18,7 @@ name: daily-adsense-seo
       news_provider:
         description: "근거 기사 출처. naver_first, google, mixed"
         required: false
-        default: "mixed"
+        default: "naver_first"
       item_list_only:
         description: "글 초안 없이 후보/기사 링크만 텔레그램 전송"
         required: false
