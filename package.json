@@ -1,16 +1,62 @@
-{
-  "name": "telegram-news-vercel",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": "20.x"
-  },
-  "scripts": {
-    "check": "node --check api/telegram-webhook.js && node --check api/morning-briefing.js && node --check api/setup-webhook.js && node --check api/test-message.js && node --check api/debug-webhook.js && node --check api/test-openai.js && node --check api/test-news.js && node --check lib/config.js && node --check lib/errors.js && node --check lib/handlers.js && node --check lib/intent.js && node --check lib/news.js && node --check lib/openai.js && node --check lib/prompts.js && node --check lib/storage.js && node --check lib/telegram.js"
-  },
-  "dependencies": {
-    "@vercel/functions": "^2.2.12",
-    "fast-xml-parser": "^4.5.3"
-  }
-}
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telegram News Bot</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f6f7f9;
+        color: #17191c;
+      }
+
+      main {
+        max-width: 720px;
+        margin: 64px auto;
+        padding: 32px;
+        background: #ffffff;
+        border: 1px solid #dde1e7;
+        border-radius: 8px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+      }
+
+      p {
+        line-height: 1.6;
+      }
+
+      code {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #eef1f5;
+      }
+
+      ul {
+        padding-left: 20px;
+        line-height: 1.8;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Telegram News Bot</h1>
+      <p>Vercel 배포는 정상입니다. 이 프로젝트는 웹페이지보다 텔레그램 웹훅 API로 동작합니다.</p>
+      <ul>
+        <li>웹훅 상태 확인: <code>/api/telegram-webhook</code></li>
+        <li>웹훅 연결: <code>/api/setup-webhook?secret=SETUP_SECRET</code></li>
+        <li>텔레그램 전송 테스트: <code>/api/test-message?secret=SETUP_SECRET</code></li>
+        <li>웹훅 진단: <code>/api/debug-webhook?secret=SETUP_SECRET</code></li>
+        <li>OpenAI 진단: <code>/api/test-openai?secret=SETUP_SECRET</code></li>
+        <li>뉴스 수집 진단: <code>/api/test-news?secret=SETUP_SECRET</code></li>
+        <li>모닝브리핑 수동 실행: <code>/api/morning-briefing?secret=CRON_SECRET</code></li>
+      </ul>
+      <p>텔레그램 봇에서 <code>/help</code>를 보내 기능을 테스트하세요.</p>
+    </main>
+  </body>
+</html>

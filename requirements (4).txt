@@ -1,0 +1,16 @@
+{
+  "name": "telegram-news-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "check": "node --check api/telegram-webhook.js && node --check api/morning-briefing.js && node --check api/setup-webhook.js && node --check api/test-message.js && node --check api/debug-webhook.js && node --check api/test-openai.js && node --check api/test-news.js && node --check lib/config.js && node --check lib/errors.js && node --check lib/handlers.js && node --check lib/intent.js && node --check lib/news.js && node --check lib/openai.js && node --check lib/prompts.js && node --check lib/storage.js && node --check lib/telegram.js"
+  },
+  "dependencies": {
+    "@vercel/functions": "^2.2.12",
+    "fast-xml-parser": "^4.5.3"
+  }
+}
