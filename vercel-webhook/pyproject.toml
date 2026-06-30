@@ -1,6 +1,6 @@
 [project]
 name = "gooddaynews-vercel-webhook"
-version = "0.2.0"
+version = "0.3.0"
 description = "Telegram topic report webhook for Gooddaynews"
 requires-python = ">=3.12"
 dependencies = [

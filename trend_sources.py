@@ -1,164 +1,199 @@
-# Telegram 실시간 주제 분석: Vercel Webhook 방식
+import os
+import re
+import html
+import feedparser
+import pandas as pd
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
+from seo_utils import clean_text, score_keyword, is_valid_korean_keyword
 
-이 버전은 GitHub Actions가 10분마다 텔레그램을 확인하는 방식이 아니라, 텔레그램 메시지가 들어오는 즉시 Vercel 서버리스 함수가 받아 처리하는 방식입니다.
+try:
+    from naver_sources import collect_naver_news_candidates
+except Exception:
+    collect_naver_news_candidates = None
 
-```text
-Telegram message
-→ Vercel /api/telegram_webhook
-→ 관련 뉴스·글로벌 속보 수집
-→ 핫이슈 / 키워드 / 카드뉴스 후보 / 카드뉴스 스크립트 / 작성글 후보 생성
-→ Telegram 재전송
-```
+GOOGLE_TRENDS_RSS = "https://trends.google.com/trending/rss?geo={geo}"
 
-## 1. GitHub에 업로드할 파일
 
-아래 파일이 추가되었습니다.
+def _parse_approx_traffic(value: str) -> int:
+    """Google Trends RSS의 20K+, 1M+, 2만+ 같은 조회수 표현을 숫자로 변환합니다."""
+    text = clean_text(value)
+    if not text:
+        return 0
 
-```text
-api/telegram_webhook.py
-scripts/telegram_webhook_control.py
-vercel.json
-.github/workflows/telegram-webhook-control.yml
-README_VERCEL_WEBHOOK.md
-```
+    # 예: 20K+, 100K+ searches, 1.5M+
+    m = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*([KkMmBb])\+?", text)
+    if m:
+        number = float(m.group(1))
+        unit = m.group(2).lower()
+        multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(unit, 1)
+        return int(number * multiplier)
 
-그리고 기존 10분 폴링용 파일은 webhook과 충돌할 수 있어 제거했습니다.
+    # 예: 2만+, 3천+
+    m = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(억|만|천)\+?", text)
+    if m:
+        number = float(m.group(1))
+        multiplier = {"천": 1_000, "만": 10_000, "억": 100_000_000}.get(m.group(2), 1)
+        return int(number * multiplier)
 
-```text
-.github/workflows/telegram-topic-listener.yml
-```
+    m = re.search(r"(\d[\d,]*)", text)
+    if m:
+        return int(m.group(1).replace(",", ""))
+    return 0
 
-Telegram은 webhook이 활성화되어 있으면 `getUpdates` 방식과 함께 쓰기 어렵습니다. 따라서 Vercel webhook을 쓰는 동안에는 10분 폴링 워크플로우를 사용하지 않는 것이 안전합니다.
 
-## 2. Vercel 환경변수 설정
+def _get_entry_approx_traffic(entry) -> int:
+    candidates = [
+        getattr(entry, "ht_approx_traffic", ""),
+        getattr(entry, "approx_traffic", ""),
+    ]
+    try:
+        candidates.append(entry.get("ht_approx_traffic", ""))
+        candidates.append(entry.get("approx_traffic", ""))
+    except Exception:
+        pass
+    candidates.append(getattr(entry, "summary", ""))
 
-Vercel 프로젝트의 `Settings → Environment Variables`에 아래 값을 넣습니다.
+    for candidate in candidates:
+        parsed = _parse_approx_traffic(candidate)
+        if parsed:
+            return parsed
+    return 0
 
-### 필수
 
-```text
-TELEGRAM_BOT_TOKEN=텔레그램 봇 토큰
-TELEGRAM_CHAT_ID=텔레그램 채널 또는 채팅 ID
-GEMINI_API_KEY=Gemini API 키
-TELEGRAM_WEBHOOK_SECRET=아무도 모르는 긴 임의 문자열
-```
+def _utc_now_dt() -> datetime:
+    return datetime.now(timezone.utc)
 
-### 권장
 
-```text
-GEMINI_MODEL=gemini-2.5-flash
-NEWS_PROVIDER=naver_first
-GOOGLE_TRENDS_GEO=KR
-TELEGRAM_TOPIC_ACCEPT_PLAIN=false
-TELEGRAM_TOPIC_LOOKBACK_HOURS=48
-TELEGRAM_TOPIC_NEWS_LINKS=8
-TELEGRAM_TOPIC_INCLUDE_GLOBAL_BREAKING=true
-TELEGRAM_TOPIC_GLOBAL_BREAKING_COUNT=3
-GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES=true
-GLOBAL_BREAKING_SOCIAL_FEEDS=Fed Press|https://www.federalreserve.gov/feeds/press_all.xml, Fed Speeches|https://www.federalreserve.gov/feeds/speeches.xml, ECB Press|https://www.ecb.europa.eu/rss/press.html, WHO Disease Outbreak|https://www.who.int/rss-feeds/news-english.xml
-```
+def _utc_now() -> str:
+    return _utc_now_dt().isoformat()
 
-네이버 뉴스 API를 같이 쓰려면 아래도 넣습니다.
 
-```text
-NAVER_CLIENT_ID=네이버 client id
-NAVER_CLIENT_SECRET=네이버 client secret
-```
+def _parse_entry_datetime(entry) -> datetime | None:
+    """RSS entry의 published/updated 시간을 UTC datetime으로 변환합니다."""
+    # feedparser가 구조화해준 값 우선 사용
+    for attr in ("published_parsed", "updated_parsed"):
+        value = getattr(entry, attr, None)
+        if value:
+            try:
+                return datetime(*value[:6], tzinfo=timezone.utc)
+            except Exception:
+                pass
 
-## 3. GitHub Secrets / Variables 설정
+    # 문자열 날짜 fallback
+    for attr in ("published", "updated", "created"):
+        raw = getattr(entry, attr, "") or ""
+        raw = clean_text(raw)
+        if not raw:
+            continue
+        try:
+            dt = parsedate_to_datetime(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            pass
+    return None
 
-GitHub Actions에서 Telegram webhook을 등록하려면 GitHub에도 아래 값을 넣습니다.
 
-### GitHub Secrets
+def _entry_age_hours(entry_dt: datetime | None) -> float | None:
+    if entry_dt is None:
+        return None
+    return max(0.0, (_utc_now_dt() - entry_dt).total_seconds() / 3600)
 
-```text
-TELEGRAM_BOT_TOKEN
-TELEGRAM_WEBHOOK_SECRET
-```
 
-`TELEGRAM_WEBHOOK_SECRET`은 Vercel에 넣은 값과 반드시 같아야 합니다.
+def fetch_google_trends_rss(geo: str = "KR", limit: int = 30, lookback_hours: int = 24) -> pd.DataFrame:
+    """Google Trends Trending Now RSS를 best-effort로 읽습니다.
 
-### GitHub Variables
+    - 기본값은 최근 24시간 이내 entry를 우선 사용합니다.
+    - Google Trends RSS가 항목별 published 시간을 제공하지 않는 경우가 있어,
+      시간값이 없는 항목은 "현재 Trending RSS 목록"으로 간주해 유지합니다.
+    """
+    columns = ["keyword", "source", "approx_traffic", "collected_at", "published_at", "age_hours"]
+    try:
+        feed = feedparser.parse(GOOGLE_TRENDS_RSS.format(geo=geo))
+        rows = []
+        cutoff = _utc_now_dt() - timedelta(hours=max(1, int(lookback_hours or 24)))
+        for e in feed.entries[:limit]:
+            title = clean_text(html.unescape(getattr(e, "title", "")))
+            summary = clean_text(html.unescape(getattr(e, "summary", "")))
+            approx = _get_entry_approx_traffic(e)
+            entry_dt = _parse_entry_datetime(e)
 
-```text
-TELEGRAM_WEBHOOK_URL=https://YOUR_PROJECT.vercel.app
-```
+            # 시간이 명확하게 있고 24시간보다 오래된 항목은 제외합니다.
+            if entry_dt is not None and entry_dt < cutoff:
+                continue
 
-전체 endpoint를 넣어도 됩니다.
+            age = _entry_age_hours(entry_dt)
+            if title:
+                rows.append({
+                    "keyword": title,
+                    "source": "google_trends_rss_24h",
+                    "approx_traffic": approx,
+                    "collected_at": _utc_now(),
+                    "published_at": entry_dt.isoformat() if entry_dt else "",
+                    "age_hours": round(age, 2) if age is not None else "",
+                })
+        return pd.DataFrame(rows, columns=columns)
+    except Exception as exc:
+        print(f"[WARN] Google Trends RSS fetch failed: {exc}")
+        return pd.DataFrame(columns=columns)
 
-```text
-TELEGRAM_WEBHOOK_URL=https://YOUR_PROJECT.vercel.app/api/telegram_webhook
-```
 
-## 4. Vercel 배포
+def load_seed_keywords(path: str = "data/seed_keywords.csv") -> pd.DataFrame:
+    columns = ["keyword", "source", "approx_traffic", "collected_at", "published_at", "age_hours"]
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=columns)
+    df = pd.read_csv(path)
+    if "keyword" not in df.columns:
+        return pd.DataFrame(columns=columns)
+    if "source" not in df.columns:
+        df["source"] = "seed"
+    if "approx_traffic" not in df.columns:
+        df["approx_traffic"] = 0
+    df["collected_at"] = _utc_now()
+    df["published_at"] = ""
+    df["age_hours"] = ""
+    return df[columns]
 
-GitHub 저장소를 Vercel에 연결해 배포합니다. 배포 후 아래 주소가 열리면 정상입니다.
 
-```text
-https://YOUR_PROJECT.vercel.app/api/telegram_webhook
-```
+def collect_keywords(geo: str = "KR", limit: int = 30, lookback_hours: int = 24, include_seed_keywords: bool | None = None) -> pd.DataFrame:
+    allow_english = os.environ.get("ALLOW_ENGLISH_KEYWORDS", "false").lower() in {"1", "true", "yes", "y"}
+    if include_seed_keywords is None:
+        include_seed_keywords = os.environ.get("INCLUDE_SEED_KEYWORDS", "false").lower() in {"1", "true", "yes", "y"}
 
-정상이라면 JSON이 보입니다.
+    frames = [fetch_google_trends_rss(geo, limit, lookback_hours=lookback_hours)]
 
-```json
-{"ok": true, "service": "gooddaynews-telegram-webhook"}
-```
+    # 네이버 뉴스 검색 API가 설정된 경우, 한국 뉴스 기반 후보를 보강합니다.
+    # 네이버는 공식 API로 실시간 인기검색어 원본 순위를 제공하지 않으므로
+    # 최신 뉴스 제목을 후보 아이템으로 추가하고, 최종 순위는 main.py에서 네이버 신호로 보정합니다.
+    if collect_naver_news_candidates is not None:
+        try:
+            category_filter = os.environ.get("CATEGORY_FILTER", "finance")
+            frames.append(collect_naver_news_candidates(limit=limit, lookback_hours=lookback_hours, category_filter=category_filter))
+        except Exception as exc:
+            print(f"[WARN] Naver news candidates skipped: {exc}")
 
-## 5. Telegram webhook 등록
+    # 최신 24시간 운영에서는 seed 키워드가 오래된 주제를 섞을 수 있으므로 기본 제외합니다.
+    if include_seed_keywords:
+        frames.append(load_seed_keywords())
 
-GitHub에서 아래 워크플로우를 수동 실행합니다.
+    frames = [f for f in frames if f is not None and not f.empty]
+    if not frames:
+        return pd.DataFrame(columns=["keyword", "source", "approx_traffic", "collected_at", "published_at", "age_hours"])
+    df = pd.concat(frames, ignore_index=True)
+    if df.empty:
+        return df
 
-```text
-Actions → telegram-webhook-control → Run workflow
-```
+    df["keyword"] = df["keyword"].map(clean_text)
+    df = df[df["keyword"] != ""].drop_duplicates("keyword")
+    df = df[df["keyword"].map(lambda x: is_valid_korean_keyword(x, allow_english=allow_english))]
 
-입력값:
+    if df.empty:
+        return df.reset_index(drop=True)
 
-```text
-action: set
-webhook_url: 비워도 됨. 단, vars.TELEGRAM_WEBHOOK_URL이 있어야 함
-drop_pending_updates: true
-```
-
-확인하려면 다시 수동 실행합니다.
-
-```text
-action: info
-```
-
-끄려면 아래처럼 실행합니다.
-
-```text
-action: delete
-```
-
-## 6. 텔레그램 사용법
-
-기본값에서는 명령어 형태만 인식합니다.
-
-```text
-/topic 원달러 환율
-/topic 국제유가 급등
-주제: 엔비디아 실적
-핫이슈 트럼프 관세
-```
-
-그냥 단어만 보내도 인식하게 하려면 Vercel 환경변수와 GitHub Variables에 아래 값을 넣습니다.
-
-```text
-TELEGRAM_TOPIC_ACCEPT_PLAIN=true
-```
-
-다만 일반 대화까지 전부 주제로 인식할 수 있으므로 처음에는 `false`를 권장합니다.
-
-## 7. 주의사항
-
-- Vercel Hobby 플랜에서는 함수 실행 시간이 기본 10초이고, `vercel.json`에서 60초까지 늘리도록 설정했습니다.
-- 리포트 생성이 60초를 넘으면 Telegram이 같은 요청을 재시도할 수 있어 중복 응답이 생길 수 있습니다.
-- 그래서 처음 운영은 아래처럼 가볍게 시작하는 것을 권장합니다.
-
-```text
-TELEGRAM_TOPIC_NEWS_LINKS=5
-TELEGRAM_TOPIC_GLOBAL_BREAKING_COUNT=2
-TELEGRAM_TOPIC_LOOKBACK_HOURS=24
-```
+    df["score"] = df.apply(
+        lambda r: score_keyword(r["keyword"], r.get("source", ""), int(r.get("approx_traffic") or 0)),
+        axis=1,
+    )
+    return df.sort_values(["score", "approx_traffic"], ascending=False).head(limit).reset_index(drop=True)

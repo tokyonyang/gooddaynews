@@ -1,276 +1,89 @@
-import html
-import os
-import re
-from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
-from urllib.parse import urlparse
+# Gooddaynews 보정 내역
 
-import requests
-import pandas as pd
+이 패치는 사용자가 요청한 아래 운영 기준을 반영합니다.
 
-from seo_utils import clean_text, is_valid_korean_keyword
+## 반영 항목
 
+1. 기본 지역/언어/시간 기준을 한국으로 고정
+   - `DEFAULT_REGION=KR`
+   - `DEFAULT_LOCALE=ko-KR`
+   - `DEFAULT_TIMEZONE=Asia/Seoul`
 
-NAVER_NEWS_API = "https://openapi.naver.com/v1/search/news.json"
-NAVER_DATALAB_API = "https://openapi.naver.com/v1/datalab/search"
+2. 근거 기사는 최근 48시간 이내만 사용
+   - `SUPPORTING_NEWS_MAX_AGE_HOURS=48`
+   - `EXCLUDE_UNKNOWN_PUBLISHED_AT=true`
+   - 발행시각이 없거나 48시간을 넘은 기사는 근거자료에서 제외
 
+3. `/topic 오늘 날씨` 지원
+   - 기본 지역은 서울
+   - Open-Meteo 기반, 별도 API 키 불필요
+   - `WEATHER_DEFAULT_CITY`, `WEATHER_DEFAULT_LAT`, `WEATHER_DEFAULT_LON`으로 지역 변경 가능
 
-def _env_true(name: str, default: str = "false") -> bool:
-    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "y", "on"}
+4. 한국어 인물명 동명이인 경고
+   - 2~4글자 한국어 인물명으로 보이는 주제는 직함/소속/분야 맥락을 확인
+   - 맥락이 섞이거나 부족하면 `인물 키워드 검증` 경고 출력
 
+5. Telegram 기사 URL 표시 개선
+   - 본문에는 `링크1`, `링크2`로 표시
+   - Vercel webhook 응답은 `inline_keyboard` 버튼으로 기사 링크 제공
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(str(os.environ.get(name, str(default))).strip())
-    except Exception:
-        return default
+6. daily-adsense-seo 예약 실행 복구
+   - 05:57 / 09:15 / 11:28 / 14:07 / 15:41 / 20:02 / 22:03 KST
 
+## Vercel 설정
 
-def _supporting_news_max_age_hours(default: int = 48) -> int:
-    return max(1, _env_int("SUPPORTING_NEWS_MAX_AGE_HOURS", default))
+Vercel Project → Settings → General → Root Directory:
 
+```text
+vercel-webhook
+```
 
-def _exclude_unknown_published_at() -> bool:
-    return _env_true("EXCLUDE_UNKNOWN_PUBLISHED_AT", "true")
+Vercel Environment Variables에 아래 값을 추가/확인하세요.
 
+```text
+DEFAULT_REGION=KR
+DEFAULT_LOCALE=ko-KR
+DEFAULT_TIMEZONE=Asia/Seoul
+SUPPORTING_NEWS_MAX_AGE_HOURS=48
+EXCLUDE_UNKNOWN_PUBLISHED_AT=true
+WEATHER_ENABLED=true
+WEATHER_DEFAULT_CITY=서울
+WEATHER_DEFAULT_LAT=37.5665
+WEATHER_DEFAULT_LON=126.9780
+PERSON_KEYWORD_GUARD=true
+PERSON_KEYWORD_MIN_CONTEXT_MATCH=2
+TELEGRAM_URL_BUTTONS=true
+TELEGRAM_LINK_BUTTON_LIMIT=8
+```
 
-def naver_enabled() -> bool:
-    return bool(os.environ.get("NAVER_CLIENT_ID") and os.environ.get("NAVER_CLIENT_SECRET"))
+기존 필수값도 유지해야 합니다.
 
+```text
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+TELEGRAM_WEBHOOK_SECRET
+GEMINI_API_KEY
+```
 
-def _headers() -> dict:
-    return {
-        "X-Naver-Client-Id": os.environ.get("NAVER_CLIENT_ID", ""),
-        "X-Naver-Client-Secret": os.environ.get("NAVER_CLIENT_SECRET", ""),
-    }
+환경변수 변경 후에는 반드시 Vercel에서 Redeploy 하세요.
 
+## 테스트
 
-def _strip_tags(text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", str(text or ""))
-    return clean_text(html.unescape(text))
+```text
+/ping
+/topic 오늘 날씨
+/topic 원달러 환율
+/topic 안정환
+```
 
+브라우저 상태 확인:
 
-def _parse_pubdate(value: str) -> datetime | None:
-    value = str(value or "").strip()
-    if not value:
-        return None
-    try:
-        dt = parsedate_to_datetime(value)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-    except Exception:
-        return None
+```text
+https://gooddaynews-ten.vercel.app/api/telegram_webhook
+```
 
+정상 버전:
 
-def _published_display(dt: datetime | None) -> str:
-    if dt is None:
-        return ""
-    kst = dt.astimezone(timezone(timedelta(hours=9)))
-    return kst.strftime("%m-%d %H:%M")
-
-
-def _age_hours(dt: datetime | None) -> float | None:
-    if dt is None:
-        return None
-    return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 3600)
-
-
-def _domain_name(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.replace("www.", "")
-        return host or "네이버뉴스"
-    except Exception:
-        return "네이버뉴스"
-
-
-def fetch_naver_news(keyword: str, limit: int = 5, lookback_hours: int = 24, display: int | None = None) -> list[dict]:
-    """네이버 뉴스 검색 API에서 최근 기사 링크를 가져옵니다.
-
-    네이버 API는 개별 기사 조회수는 제공하지 않습니다. 여기서는 최근 기사 수와 발행시각을
-    한국형 이슈 검증 신호로 사용합니다.
-    """
-    keyword = clean_text(keyword)
-    if not keyword or not naver_enabled():
-        return []
-
-    max_age = _supporting_news_max_age_hours(48)
-    hours = min(max(1, int(lookback_hours or 24)), max_age)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-    display = max(limit * 4, display or min(100, max(20, limit * 6)))
-
-    params = {
-        "query": keyword,
-        "display": min(100, display),
-        "start": 1,
-        "sort": "date",
-    }
-
-    try:
-        resp = requests.get(NAVER_NEWS_API, headers=_headers(), params=params, timeout=12)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as exc:
-        print(f"[WARN] Naver News API fetch failed for {keyword}: {exc}")
-        return []
-
-    rows: list[dict] = []
-    seen = set()
-    for item in data.get("items", []):
-        pub_dt = _parse_pubdate(item.get("pubDate", ""))
-        if pub_dt is None and _exclude_unknown_published_at():
-            continue
-        if pub_dt is not None and pub_dt < cutoff:
-            continue
-
-        title = _strip_tags(item.get("title", ""))
-        description = _strip_tags(item.get("description", ""))
-        original = clean_text(item.get("originallink", ""))
-        link = clean_text(item.get("link", ""))
-        url = original or link
-        if not title or not url:
-            continue
-
-        dedupe_key = re.sub(r"\s+", " ", title.lower())
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-
-        age = _age_hours(pub_dt)
-        rows.append({
-            "title": title,
-            "url": url,
-            "source": _domain_name(original or link),
-            "published": _published_display(pub_dt),
-            "published_at": pub_dt.isoformat() if pub_dt else "",
-            "age_hours": round(age, 2) if age is not None else "",
-            "description": description,
-            "provider": "naver_news",
-        })
-        if len(rows) >= limit:
-            break
-
-    return rows
-
-
-def fetch_naver_news_signal(keyword: str, lookback_hours: int = 24, display: int = 30) -> dict:
-    """최근 네이버 뉴스량을 점수화하기 위한 보조 신호입니다."""
-    news = fetch_naver_news(keyword, limit=display, lookback_hours=lookback_hours, display=display)
-    return {
-        "naver_news_count": len(news),
-        "naver_news_latest_at": news[0].get("published_at", "") if news else "",
-    }
-
-
-def fetch_naver_datalab_score(keyword: str, lookback_hours: int = 24) -> float:
-    """네이버 데이터랩 통합검색어 트렌드 상대지수 평균값을 반환합니다.
-
-    데이터랩은 Open API 기준으로 일간/주간/월간 상대지수를 제공하므로, 24시간 단위의
-    실시간 조회수가 아니라 최근 일자 단위 관심도 보정값으로만 사용합니다.
-    """
-    keyword = clean_text(keyword)
-    if not keyword or not naver_enabled() or not _env_true("USE_NAVER_DATALAB", "true"):
-        return 0.0
-
-    # 일간 데이터는 당일이 비어 있을 수 있어, 최근 3일 범위를 요청하고 나온 ratio만 사용합니다.
-    kst = timezone(timedelta(hours=9))
-    today = datetime.now(kst).date()
-    start_date = today - timedelta(days=max(2, int((lookback_hours or 24) / 24) + 1))
-    end_date = today
-
-    payload = {
-        "startDate": start_date.isoformat(),
-        "endDate": end_date.isoformat(),
-        "timeUnit": "date",
-        "keywordGroups": [{"groupName": keyword[:20], "keywords": [keyword]}],
-    }
-
-    try:
-        resp = requests.post(NAVER_DATALAB_API, headers={**_headers(), "Content-Type": "application/json"}, json=payload, timeout=12)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as exc:
-        print(f"[WARN] Naver DataLab API fetch failed for {keyword}: {exc}")
-        return 0.0
-
-    ratios = []
-    for result in data.get("results", []):
-        for row in result.get("data", []):
-            try:
-                ratios.append(float(row.get("ratio", 0) or 0))
-            except Exception:
-                pass
-    if not ratios:
-        return 0.0
-    # 가장 최근 값에 가중치를 주되, 값이 없을 경우 평균 수준을 반영합니다.
-    return round(max(ratios[-1], sum(ratios) / len(ratios)), 2)
-
-
-FINANCE_NEWS_QUERIES = [
-    "금리 환율 물가 경제",
-    "대출 예금 금융 소비자",
-    "코스피 코스닥 증시 주식",
-    "부동산 전세 청약 대출",
-    "소상공인 지원금 정책 금융",
-]
-
-GENERAL_NEWS_QUERIES = [
-    "경제 금융 증시",
-    "정책 사회 이슈",
-    "생활 정보 제도",
-    "산업 기업 기술",
-    "부동산 교육 날씨",
-]
-
-
-def _candidate_from_title(title: str) -> str:
-    title = _strip_tags(title)
-    title = re.sub(r"\s+-\s+[^-]{2,20}$", "", title)
-    title = re.sub(r"[\[\(].*?[\]\)]", " ", title)
-    title = re.sub(r'["\'“”‘’]', "", title)
-    title = re.sub(r"\s+", " ", title).strip(" .,:;!?…·|/-")
-    # 너무 긴 제목은 텔레그램 후보로 보기 어렵기 때문에 핵심 앞부분만 사용합니다.
-    words = title.split()
-    if len(words) > 8:
-        title = " ".join(words[:8])
-    return title[:60].strip()
-
-
-def collect_naver_news_candidates(limit: int = 30, lookback_hours: int = 24, category_filter: str = "finance") -> pd.DataFrame:
-    """네이버 뉴스 검색 결과에서 최근 이슈 후보를 보강 수집합니다.
-
-    네이버는 공식 Open API로 '실시간 인기검색어' 원본 랭킹을 제공하지 않으므로,
-    카테고리성 검색어의 최신 뉴스 제목을 후보 아이템으로 보강합니다.
-    """
-    columns = ["keyword", "source", "approx_traffic", "collected_at", "published_at", "age_hours"]
-    if not naver_enabled() or not _env_true("USE_NAVER_NEWS_CANDIDATES", "true"):
-        return pd.DataFrame(columns=columns)
-
-    raw_filter = str(category_filter or "finance").lower().strip()
-    queries = GENERAL_NEWS_QUERIES if raw_filter in {"all", "전체", "*"} else FINANCE_NEWS_QUERIES
-
-    rows = []
-    seen = set()
-    per_query = max(5, int(limit / max(1, len(queries))) + 3)
-    for query in queries:
-        for article in fetch_naver_news(query, limit=per_query, lookback_hours=lookback_hours, display=40):
-            candidate = _candidate_from_title(article.get("title", ""))
-            if not candidate or candidate in seen:
-                continue
-            if not is_valid_korean_keyword(candidate, allow_english=_env_true("ALLOW_ENGLISH_KEYWORDS", "false")):
-                continue
-            seen.add(candidate)
-            rows.append({
-                "keyword": candidate,
-                "source": "naver_news_candidate_24h",
-                "approx_traffic": 0,
-                "collected_at": datetime.now(timezone.utc).isoformat(),
-                "published_at": article.get("published_at", ""),
-                "age_hours": article.get("age_hours", ""),
-            })
-            if len(rows) >= limit:
-                break
-        if len(rows) >= limit:
-            break
-
-    return pd.DataFrame(rows, columns=columns)
+```text
+topic-report-flask-kr48-weather-personguard-2026-06-30-01
+```

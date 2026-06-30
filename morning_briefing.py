@@ -1,118 +1,230 @@
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
+from __future__ import annotations
 
-WP_SITE_URL=https://gooddaynews.store
-# WP_API_URL은 보통 비워두세요. REST 주소를 직접 지정해야 할 때만 사용합니다.
-# WP_API_URL=https://gooddaynews.store/wp-json/wp/v2/posts
-WP_USERNAME=your_wordpress_username
-WP_APP_PASSWORD=your_wordpress_application_password
-WP_DEFAULT_STATUS=draft
+import os
+import re
+from datetime import datetime, timezone, timedelta
+from typing import Any
 
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=@your_channel_username_or_-100_id
+import requests
+from dotenv import load_dotenv
 
-SITE_DESCRIPTION=생활 정보와 뉴스 이슈를 쉽게 정리하는 블로그
-GOOGLE_TRENDS_GEO=KR
-MAX_KEYWORDS=30
-MAX_POSTS_PER_RUN=10
-# true면 글 초안/워드프레스 업로드 없이 작성 후보 아이템과 관련 기사 링크만 보냅니다.
-ITEM_LIST_ONLY=true
-# 주제별 관련 신문 기사 링크 수
-NEWS_LINKS_PER_TOPIC=5
-# 오늘의 핫이슈/카드뉴스/작성글 추천 개수
-HOT_ISSUE_COUNT=10
-CARD_NEWS_COUNT=3
-ARTICLE_COUNT=3
+from news_sources import fetch_related_news, fetch_global_breaking_news
+from telegram_notify import send_telegram_with_buttons, html_escape
 
-# 오늘의 핫이슈와 별개로 항상 추적할 이슈
-# 예: 국민연금 환율, 코스피 8000, 전기요금 동결
-SPECIAL_ISSUES=
-SPECIAL_ISSUE_TITLE=📌 별도 추적 이슈
-SPECIAL_ISSUE_COUNT=5
-SPECIAL_ISSUE_CATEGORY_FILTER=all
+load_dotenv()
 
-# 글로벌 경제 위험 알림: 전쟁/질병/환율/원자재/금리/루머/로이터·블룸버그성 속보
-GLOBAL_MACRO_ALERT_ENABLED=true
-GLOBAL_MACRO_ALERT_TITLE=🌍 글로벌 경제 위험 알림
-# 비워두면 코드의 기본 묶음을 사용합니다. 직접 운영하려면 쉼표/줄바꿈으로 입력하세요.
-# 예: 로이터 속보 글로벌 경제 시장, 블룸버그 속보 글로벌 시장 경제, 원달러 환율 급등 급락, 국제유가 급등 급락
-GLOBAL_MACRO_ALERT_TOPICS=
-GLOBAL_MACRO_ALERT_COUNT=7
-GLOBAL_MACRO_ALERT_LOOKBACK_HOURS=24
-
-# 글로벌 속보 TOP 3: 경제 영향 가능 글로벌 기사/SNS 게시물을 최신 발행순으로 별도 전송
-GLOBAL_BREAKING_NEWS_ENABLED=true
-GLOBAL_BREAKING_NEWS_TITLE=🚨 글로벌 속보 TOP 3
-GLOBAL_BREAKING_NEWS_COUNT=3
-GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS=24
-# true면 Google News RSS 외에 AP/BBC/CNBC/Fed/WHO 등 실제 뉴스/공식 RSS 후보도 보조 확인합니다.
-GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES=true
-# 비워두면 Reuters/Bloomberg/시장 속보 기본 묶음을 사용합니다.
-GLOBAL_BREAKING_NEWS_QUERIES=
-# 영향력 인물 SNS 글을 RSS/Atom으로 받을 수 있는 feed가 있으면 이름|URL 형식으로 추가합니다.
-# 예: Elon Musk|https://example.com/elon/rss, Fed Chair|https://example.com/powell/rss
-GLOBAL_BREAKING_SOCIAL_FEEDS=
-
-# 카테고리 필터
-# finance: 경제·금융/증권·투자/부동산·주거금융/정책·지원금만 사용
-# all: 전체 카테고리 사용
-# economy_finance,stock_investment 처럼 쉼표로 직접 지정 가능
-CATEGORY_FILTER=finance
-
-# 수동으로 특정 주제만 생성하고 싶을 때 쉼표/줄바꿈으로 입력합니다.
-SELECTED_TOPICS=
-# true면 WordPress 업로드 없이 텔레그램으로만 글 초안을 보냅니다.
-TELEGRAM_ONLY=false
-# true면 WordPress 업로드 성공 여부와 관계없이 생성된 글 본문을 텔레그램으로 별도 전송합니다.
-SEND_ARTICLES_TO_TELEGRAM=false
-# WordPress 업로드 실패 시에도 생성된 글 본문을 텔레그램으로 전송합니다.
-SEND_ARTICLE_ON_WP_FAIL=true
-ALLOW_ENGLISH_KEYWORDS=false
-ALLOW_SMALLER_LIMITS=false
-
-# 최근 자료 기준 시간
-LOOKBACK_HOURS=24
-# 후보/근거자료가 부족하면 자동으로 전체 카테고리 → 48시간으로 확장
-AUTO_FALLBACK=true
-FALLBACK_LOOKBACK_HOURS=48
-# 최신 트렌드 운영에서는 기본 false 권장
-INCLUDE_SEED_KEYWORDS=false
-
-# Naver Open API credentials. 없으면 Google 기반으로 자동 동작합니다.
-NAVER_CLIENT_ID=your_naver_client_id
-NAVER_CLIENT_SECRET=your_naver_client_secret
-# naver_first: 네이버 뉴스 우선 + 부족분 Google 보완 / google: Google News만 / mixed: 네이버+Google
-NEWS_PROVIDER=naver_first
-# true면 네이버 뉴스 최신 제목을 후보 아이템으로 보강합니다.
-USE_NAVER_NEWS_CANDIDATES=true
-# true면 네이버 DataLab 상대 검색지수를 순위 보정에 사용합니다.
-USE_NAVER_DATALAB=true
+KST = timezone(timedelta(hours=9))
 
 
-# -----------------------------------------------------------------------------
-# 한국 기준 / 48시간 기사 제한 / 날씨 / 인물명 안전장치
-# -----------------------------------------------------------------------------
-DEFAULT_REGION=KR
-DEFAULT_LOCALE=ko-KR
-DEFAULT_TIMEZONE=Asia/Seoul
+def _env_bool(name: str, default: str = "false") -> bool:
+    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "y", "on"}
 
-# 근거 기사로 사용할 최대 기사 나이. 기본 48시간.
-SUPPORTING_NEWS_MAX_AGE_HOURS=48
-# 발행시각을 확인할 수 없는 기사는 근거자료에서 제외.
-EXCLUDE_UNKNOWN_PUBLISHED_AT=true
 
-# /topic 오늘 날씨 요청 또는 ALWAYS_INCLUDE_WEATHER=true일 때 사용
-WEATHER_ENABLED=true
-WEATHER_DEFAULT_CITY=서울
-WEATHER_DEFAULT_LAT=37.5665
-WEATHER_DEFAULT_LON=126.9780
-ALWAYS_INCLUDE_WEATHER=false
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(str(os.environ.get(name, str(default))).strip())
+    except Exception:
+        return default
 
-# 한국어 인물명 동명이인 방지
-PERSON_KEYWORD_GUARD=true
-PERSON_KEYWORD_MIN_CONTEXT_MATCH=2
-PERSON_KEYWORD_AMBIGUITY_WARNING=true
 
-# Telegram 링크 표시
-TELEGRAM_URL_BUTTONS=true
-TELEGRAM_LINK_BUTTON_LIMIT=8
+def _weather_code_text(code: Any) -> str:
+    try:
+        c = int(code)
+    except Exception:
+        return "상태 확인 필요"
+    if c == 0:
+        return "맑음"
+    if c in {1, 2, 3}:
+        return "대체로 맑음/구름"
+    if c in {45, 48}:
+        return "안개"
+    if c in {51, 53, 55, 56, 57}:
+        return "이슬비"
+    if c in {61, 63, 65, 66, 67, 80, 81, 82}:
+        return "비"
+    if c in {71, 73, 75, 77, 85, 86}:
+        return "눈"
+    if c in {95, 96, 99}:
+        return "뇌우"
+    return "상태 확인 필요"
+
+
+def fetch_today_weather() -> dict[str, Any] | None:
+    if not _env_bool("WEATHER_ENABLED", "true"):
+        return None
+
+    city = os.environ.get("WEATHER_DEFAULT_CITY", "서울").strip() or "서울"
+    lat = os.environ.get("WEATHER_DEFAULT_LAT", "37.5665").strip()
+    lon = os.environ.get("WEATHER_DEFAULT_LON", "126.9780").strip()
+
+    try:
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            "&current=temperature_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m"
+            "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+            "&timezone=Asia%2FSeoul&forecast_days=1"
+        )
+        data = requests.get(url, timeout=12).json()
+        current = data.get("current", {}) or {}
+        daily = data.get("daily", {}) or {}
+        return {
+            "city": city,
+            "condition": _weather_code_text(current.get("weather_code")),
+            "temp": current.get("temperature_2m"),
+            "feels": current.get("apparent_temperature"),
+            "wind": current.get("wind_speed_10m"),
+            "min": (daily.get("temperature_2m_min") or [None])[0],
+            "max": (daily.get("temperature_2m_max") or [None])[0],
+            "pop": (daily.get("precipitation_probability_max") or [None])[0],
+        }
+    except Exception as exc:
+        print("[WARN] weather fetch failed:", repr(exc))
+        return None
+
+
+def weather_section() -> str:
+    w = fetch_today_weather()
+    if not w:
+        return "🌤️ <b>오늘의 날씨</b>\n- 날씨 정보를 가져오지 못했습니다."
+
+    living = []
+    if isinstance(w.get("pop"), (int, float)) and w["pop"] >= 50:
+        living.append("우산을 챙기는 편이 좋습니다.")
+    if isinstance(w.get("wind"), (int, float)) and w["wind"] >= 8:
+        living.append("바람이 강할 수 있어 체감온도를 확인하세요.")
+    if not living:
+        living.append("외출 전 체감온도와 강수 가능성을 한 번 더 확인하세요.")
+
+    return (
+        "🌤️ <b>오늘의 날씨</b>\n"
+        f"- 기준지역: <b>{html_escape(w.get('city'))}</b> / 한국시간\n"
+        f"- 현재: {html_escape(w.get('condition'))} / 기온 {html_escape(w.get('temp'))}℃ / 체감 {html_escape(w.get('feels'))}℃\n"
+        f"- 오늘 최저·최고: {html_escape(w.get('min'))}℃ ~ {html_escape(w.get('max'))}℃ / 강수확률 {html_escape(w.get('pop'))}%\n"
+        f"- 생활 포인트: {html_escape(' '.join(living))}"
+    )
+
+
+def _topics() -> list[str]:
+    raw = os.environ.get("MORNING_BRIEFING_TOPICS", "").strip()
+    if raw:
+        rows = [x.strip() for x in re.split(r"[\n,;]+", raw) if x.strip()]
+        if rows:
+            return rows[: _env_int("MORNING_TOPIC_LIMIT", 10)]
+    return [
+        "원달러 환율",
+        "코스피 외국인 수급",
+        "미국 고용보고서",
+        "연준 금리",
+        "AI 반도체",
+        "국제유가",
+        "원자재 가격",
+        "부동산 정책",
+        "국내 경제 정책",
+        "글로벌 증시",
+    ][: _env_int("MORNING_TOPIC_LIMIT", 10)]
+
+
+def _short_summary(topic: str, articles: list[dict]) -> str:
+    if not articles:
+        return f"{topic} 관련 최근 48시간 이내 확인 가능한 기사 근거가 부족합니다."
+    title = articles[0].get("title") or ""
+    return f"{topic} 관련 최신 보도에서 '{title[:50]}' 흐름이 확인됩니다."
+
+
+def build_morning_briefing() -> tuple[str, list[dict]]:
+    now = datetime.now(KST)
+    lookback = min(_env_int("MORNING_LOOKBACK_HOURS", 24), _env_int("SUPPORTING_NEWS_MAX_AGE_HOURS", 48))
+    links_per_topic = _env_int("MORNING_LINKS_PER_TOPIC", 2)
+
+    all_articles: list[dict] = []
+    topic_rows = []
+
+    for topic in _topics():
+        articles = fetch_related_news(topic, limit=links_per_topic, geo="KR", category_hint="경제 금융 증시 정책", lookback_hours=lookback)
+        all_articles.extend(articles)
+        topic_rows.append((topic, articles, _short_summary(topic, articles)))
+
+    # 글로벌 속보 보강
+    global_items = []
+    if _env_bool("MORNING_INCLUDE_GLOBAL_BREAKING", "true"):
+        global_items = fetch_global_breaking_news(
+            limit=_env_int("MORNING_GLOBAL_BREAKING_COUNT", 3),
+            geo="KR",
+            lookback_hours=lookback,
+            use_direct_sites=_env_bool("GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES", "true"),
+            social_feeds=os.environ.get("GLOBAL_BREAKING_SOCIAL_FEEDS", ""),
+        )
+        all_articles.extend(global_items)
+
+    lines = [
+        f"🌅 <b>{now.strftime('%-m월 %-d일')} 모닝 브리핑</b>",
+        "기준: <b>한국 / 한국시간 / 최근 48시간 이내 기사</b>",
+        "",
+        "좋은 아침입니다. 오늘 확인할 핵심 이슈를 짧게 정리했습니다.",
+        "",
+        weather_section(),
+        "",
+        "🔥 <b>오늘의 핫이슈 키워드</b>",
+    ]
+
+    for topic, articles, summary in topic_rows[:10]:
+        lines.append(f"#{html_escape(topic.replace(' ', ''))} - {html_escape(summary)}")
+
+    lines.append("\n🇰🇷 <b>국내·경제 주요 체크포인트</b>")
+    for i, (topic, articles, summary) in enumerate(topic_rows[:5], 1):
+        lines.append(f"{i}) <b>{html_escape(topic)}</b>\n{html_escape(summary)}")
+
+    if global_items:
+        lines.append("\n🌎 <b>글로벌 속보 체크</b>")
+        for i, article in enumerate(global_items, 1):
+            title = html_escape(article.get("title") or "글로벌 속보")
+            source = html_escape(article.get("source") or "")
+            published = html_escape(article.get("published") or "")
+            label = html_escape(article.get("impact_label") or "글로벌경제")
+            lines.append(f"{i}) [{label}] {title} ({source} · {published})")
+
+    lines.append("\n💹 <b>투자·생활 포인트</b>")
+    lines.append("✅ 환율·금리·외국인 수급은 함께 확인하세요.")
+    lines.append("✅ AI·반도체는 실적 기대와 과열 논란을 동시에 봐야 합니다.")
+    lines.append("✅ 원자재·유가는 물가와 운송비에 연결될 수 있습니다.")
+    lines.append("✅ 최근 48시간 이내 근거가 부족한 이슈는 카드뉴스화 전 추가 확인이 필요합니다.")
+
+    if topic_rows:
+        one_line = " / ".join(topic for topic, _, _ in topic_rows[:4])
+    else:
+        one_line = "환율·금리·증시·글로벌 속보"
+    lines.append(f"\n🌤️ <b>오늘 한 줄 요약</b>\n오늘은 <b>{html_escape(one_line)}</b> 흐름을 중심으로 확인하세요.")
+
+    lines.append("\n🔗 <b>참고한 주요 기사</b>")
+    if all_articles:
+        seen = set()
+        count = 0
+        for article in all_articles:
+            url = article.get("url") or ""
+            title = article.get("title") or ""
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            count += 1
+            lines.append(f"- 링크{count}: {html_escape(title)}")
+            if count >= _env_int("MORNING_LINK_BUTTON_LIMIT", 8):
+                break
+    else:
+        lines.append("- 최근 48시간 이내 확인 가능한 기사 근거가 부족합니다.")
+
+    return "\n".join(lines), all_articles
+
+
+def main():
+    text, articles = build_morning_briefing()
+    send_telegram_with_buttons(
+        text,
+        articles,
+        parse_mode="HTML",
+        button_limit=_env_int("MORNING_LINK_BUTTON_LIMIT", 8),
+    )
+
+
+if __name__ == "__main__":
+    main()
