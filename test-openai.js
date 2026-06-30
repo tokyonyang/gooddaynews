@@ -1,62 +1,42 @@
-name: morning-briefing
+import { env, optionalEnv } from "../lib/config.js";
+import { safeErrorMessage } from "../lib/errors.js";
+import { createTextResponse, getOutputText } from "../lib/openai.js";
 
-"on":
-  workflow_dispatch:
-  schedule:
-    # 매일 05:57 KST = 전일 20:57 UTC
-    - cron: "57 20 * * *"
+export async function GET(request) {
+  try {
+    const url = new URL(request.url);
+    const secret = url.searchParams.get("secret");
 
-permissions:
-  contents: read
+    if (secret !== env("SETUP_SECRET")) {
+      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
-jobs:
-  morning-briefing:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    const response = await createTextResponse(
+      "한국어로 짧게 'OpenAI 연결 정상'이라고만 답하세요."
+    );
+    const text = getOutputText(response);
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    return Response.json({
+      ok: true,
+      model: optionalEnv("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+      output: text
+    });
+  } catch (error) {
+    console.error(error);
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Send morning briefing
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          NEWS_PROVIDER: ${{ vars.NEWS_PROVIDER || 'naver_first' }}
-
-          DEFAULT_REGION: ${{ vars.DEFAULT_REGION || 'KR' }}
-          DEFAULT_LOCALE: ${{ vars.DEFAULT_LOCALE || 'ko-KR' }}
-          DEFAULT_TIMEZONE: ${{ vars.DEFAULT_TIMEZONE || 'Asia/Seoul' }}
-          SUPPORTING_NEWS_MAX_AGE_HOURS: ${{ vars.SUPPORTING_NEWS_MAX_AGE_HOURS || '48' }}
-          EXCLUDE_UNKNOWN_PUBLISHED_AT: ${{ vars.EXCLUDE_UNKNOWN_PUBLISHED_AT || 'true' }}
-
-          WEATHER_ENABLED: ${{ vars.WEATHER_ENABLED || 'true' }}
-          WEATHER_DEFAULT_CITY: ${{ vars.WEATHER_DEFAULT_CITY || '서울' }}
-          WEATHER_DEFAULT_LAT: ${{ vars.WEATHER_DEFAULT_LAT || '37.5665' }}
-          WEATHER_DEFAULT_LON: ${{ vars.WEATHER_DEFAULT_LON || '126.9780' }}
-
-          TELEGRAM_URL_BUTTONS: ${{ vars.TELEGRAM_URL_BUTTONS || 'true' }}
-          TELEGRAM_LINK_BUTTON_LIMIT: ${{ vars.TELEGRAM_LINK_BUTTON_LIMIT || '8' }}
-
-          MORNING_TOPIC_LIMIT: ${{ vars.MORNING_TOPIC_LIMIT || '10' }}
-          MORNING_LINKS_PER_TOPIC: ${{ vars.MORNING_LINKS_PER_TOPIC || '2' }}
-          MORNING_LINK_BUTTON_LIMIT: ${{ vars.MORNING_LINK_BUTTON_LIMIT || '8' }}
-          MORNING_LOOKBACK_HOURS: ${{ vars.MORNING_LOOKBACK_HOURS || '24' }}
-          MORNING_INCLUDE_GLOBAL_BREAKING: ${{ vars.MORNING_INCLUDE_GLOBAL_BREAKING || 'true' }}
-          MORNING_GLOBAL_BREAKING_COUNT: ${{ vars.MORNING_GLOBAL_BREAKING_COUNT || '3' }}
-          MORNING_BRIEFING_TOPICS: ${{ vars.MORNING_BRIEFING_TOPICS || '' }}
-          GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES: ${{ vars.GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES || 'true' }}
-          GLOBAL_BREAKING_SOCIAL_FEEDS: ${{ vars.GLOBAL_BREAKING_SOCIAL_FEEDS || '' }}
-        run: python morning_briefing.py
+    return Response.json(
+      {
+        ok: false,
+        error: "test_openai_failed",
+        message: safeErrorMessage(error),
+        checkList: [
+          "Vercel Environment Variables의 OPENAI_API_KEY 값을 확인하세요.",
+          "OPENAI_TEXT_MODEL을 gpt-4.1-mini로 설정하세요.",
+          "환경변수를 수정했다면 Vercel에서 Redeploy를 다시 실행하세요.",
+          "OpenAI 계정의 결제/사용량 한도를 확인하세요."
+        ]
+      },
+      { status: 500 }
+    );
+  }
+}

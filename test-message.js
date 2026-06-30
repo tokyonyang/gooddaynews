@@ -1,175 +1,41 @@
-name: daily-adsense-seo
+import { env } from "../lib/config.js";
+import { safeErrorMessage } from "../lib/errors.js";
+import { sendMessage } from "../lib/telegram.js";
 
-"on":
-  workflow_dispatch:
-    inputs:
-      topics:
-        description: "선택 주제. 쉼표 또는 줄바꿈으로 구분. 비우면 트렌드 키워드 자동 수집"
-        required: false
-        default: ""
-      special_issues:
-        description: "오늘의 핫이슈와 별개로 고정 추적할 별도 이슈"
-        required: false
-        default: ""
-      category_filter:
-        description: "카테고리 필터. finance=경제 중심, all=전체"
-        required: false
-        default: "all"
-      news_provider:
-        description: "근거 기사 출처. naver_first, google, mixed"
-        required: false
-        default: "naver_first"
-      item_list_only:
-        description: "글 초안 없이 후보/기사 링크만 텔레그램 전송"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      lookback_hours:
-        description: "최근 자료 기준 시간"
-        required: false
-        default: "12"
-      global_breaking_news_enabled:
-        description: "경제 영향 가능 글로벌 속보 TOP 3 섹션 사용"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
-      global_breaking_news_queries:
-        description: "글로벌 속보 검색어. 비우면 Variables/기본값 사용"
-        required: false
-        default: ""
-      global_breaking_social_feeds:
-        description: "영향력 인물 SNS/RSS/Atom feed. 이름|URL 형식"
-        required: false
-        default: ""
-      telegram_only:
-        description: "item_list_only=false일 때 워드프레스 업로드 없이 텔레그램으로만 전송"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-  schedule:
-    # 하루 7회 자동 실행 (GitHub Actions cron은 UTC 기준, KST=UTC+9)
-    # 05:57 KST = 20:57 UTC(전일)
-    # 09:15 KST = 00:15 UTC
-    # 11:28 KST = 02:28 UTC
-    # 14:07 KST = 05:07 UTC
-    # 15:41 KST = 06:41 UTC
-    # 20:02 KST = 11:02 UTC
-    # 22:03 KST = 13:03 UTC
-    - cron: "57 20 * * *"
-    - cron: "15 0 * * *"
-    - cron: "28 2 * * *"
-    - cron: "7 5 * * *"
-    - cron: "41 6 * * *"
-    - cron: "2 11 * * *"
-    - cron: "3 13 * * *"
+export async function GET(request) {
+  try {
+    const url = new URL(request.url);
+    const secret = url.searchParams.get("secret");
 
-permissions:
-  contents: read
+    if (secret !== env("SETUP_SECRET")) {
+      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
-jobs:
-  daily-adsense-seo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    await sendMessage(
+      env("TELEGRAM_CHAT_ID"),
+      "테스트 메시지입니다. Vercel 서버가 텔레그램으로 메시지를 보낼 수 있습니다."
+    );
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    return Response.json({
+      ok: true,
+      message: "test message sent"
+    });
+  } catch (error) {
+    console.error(error);
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Generate SEO item report
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          NEWS_PROVIDER: ${{ github.event.inputs.news_provider || vars.NEWS_PROVIDER || 'naver_first' }}
-          USE_NAVER_NEWS_CANDIDATES: ${{ vars.USE_NAVER_NEWS_CANDIDATES || 'true' }}
-          USE_NAVER_DATALAB: ${{ vars.USE_NAVER_DATALAB || 'true' }}
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
-          WP_API_URL: ${{ secrets.WP_API_URL }}
-          WP_USERNAME: ${{ secrets.WP_USERNAME }}
-          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          WP_DEFAULT_STATUS: draft
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SITE_DESCRIPTION: ${{ vars.SITE_DESCRIPTION }}
-          GOOGLE_TRENDS_GEO: KR
-          DEFAULT_REGION: ${{ vars.DEFAULT_REGION || 'KR' }}
-          DEFAULT_LOCALE: ${{ vars.DEFAULT_LOCALE || 'ko-KR' }}
-          DEFAULT_TIMEZONE: ${{ vars.DEFAULT_TIMEZONE || 'Asia/Seoul' }}
-          SUPPORTING_NEWS_MAX_AGE_HOURS: ${{ vars.SUPPORTING_NEWS_MAX_AGE_HOURS || '48' }}
-          EXCLUDE_UNKNOWN_PUBLISHED_AT: ${{ vars.EXCLUDE_UNKNOWN_PUBLISHED_AT || 'true' }}
-          WEATHER_ENABLED: ${{ vars.WEATHER_ENABLED || 'true' }}
-          WEATHER_DEFAULT_CITY: ${{ vars.WEATHER_DEFAULT_CITY || '서울' }}
-          WEATHER_DEFAULT_LAT: ${{ vars.WEATHER_DEFAULT_LAT || '37.5665' }}
-          WEATHER_DEFAULT_LON: ${{ vars.WEATHER_DEFAULT_LON || '126.9780' }}
-          PERSON_KEYWORD_GUARD: ${{ vars.PERSON_KEYWORD_GUARD || 'true' }}
-          PERSON_KEYWORD_MIN_CONTEXT_MATCH: ${{ vars.PERSON_KEYWORD_MIN_CONTEXT_MATCH || '2' }}
-          TELEGRAM_URL_BUTTONS: ${{ vars.TELEGRAM_URL_BUTTONS || 'true' }}
-          TELEGRAM_LINK_BUTTON_LIMIT: ${{ vars.TELEGRAM_LINK_BUTTON_LIMIT || '8' }}
-
-          SELECTED_TOPICS: ${{ github.event.inputs.topics || vars.SELECTED_TOPICS || '' }}
-          SPECIAL_ISSUES: ${{ github.event.inputs.special_issues || vars.SPECIAL_ISSUES || '' }}
-          SPECIAL_ISSUE_TITLE: ${{ vars.SPECIAL_ISSUE_TITLE || '📌 별도 추적 이슈' }}
-          SPECIAL_ISSUE_COUNT: ${{ vars.SPECIAL_ISSUE_COUNT || '5' }}
-          SPECIAL_ISSUE_CATEGORY_FILTER: ${{ vars.SPECIAL_ISSUE_CATEGORY_FILTER || 'all' }}
-
-          GLOBAL_MACRO_ALERT_ENABLED: ${{ vars.GLOBAL_MACRO_ALERT_ENABLED || 'true' }}
-          GLOBAL_MACRO_ALERT_TITLE: ${{ vars.GLOBAL_MACRO_ALERT_TITLE || '🌍 글로벌 경제 위험 알림' }}
-          GLOBAL_MACRO_ALERT_TOPICS: ${{ vars.GLOBAL_MACRO_ALERT_TOPICS || '' }}
-          GLOBAL_MACRO_ALERT_COUNT: ${{ vars.GLOBAL_MACRO_ALERT_COUNT || '7' }}
-          GLOBAL_MACRO_ALERT_LOOKBACK_HOURS: ${{ vars.GLOBAL_MACRO_ALERT_LOOKBACK_HOURS || '24' }}
-
-          GLOBAL_BREAKING_NEWS_ENABLED: ${{ github.event.inputs.global_breaking_news_enabled || vars.GLOBAL_BREAKING_NEWS_ENABLED || 'true' }}
-          GLOBAL_BREAKING_NEWS_TITLE: ${{ vars.GLOBAL_BREAKING_NEWS_TITLE || '🚨 글로벌 속보 TOP 3' }}
-          GLOBAL_BREAKING_NEWS_COUNT: ${{ vars.GLOBAL_BREAKING_NEWS_COUNT || '3' }}
-          GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS: ${{ vars.GLOBAL_BREAKING_NEWS_LOOKBACK_HOURS || '24' }}
-          GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES: ${{ vars.GLOBAL_BREAKING_NEWS_USE_DIRECT_SITES || 'true' }}
-          GLOBAL_BREAKING_NEWS_QUERIES: ${{ github.event.inputs.global_breaking_news_queries || vars.GLOBAL_BREAKING_NEWS_QUERIES || '' }}
-          GLOBAL_BREAKING_SOCIAL_FEEDS: ${{ github.event.inputs.global_breaking_social_feeds || vars.GLOBAL_BREAKING_SOCIAL_FEEDS || '' }}
-
-          CATEGORY_FILTER: ${{ github.event.inputs.category_filter || vars.CATEGORY_FILTER || 'finance' }}
-          ITEM_LIST_ONLY: ${{ github.event.inputs.item_list_only || vars.ITEM_LIST_ONLY || 'true' }}
-          NEWS_LINKS_PER_TOPIC: ${{ vars.NEWS_LINKS_PER_TOPIC || '5' }}
-          LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || vars.LOOKBACK_HOURS || '24' }}
-          AUTO_FALLBACK: ${{ vars.AUTO_FALLBACK || 'true' }}
-          FALLBACK_LOOKBACK_HOURS: ${{ vars.FALLBACK_LOOKBACK_HOURS || '48' }}
-          INCLUDE_SEED_KEYWORDS: ${{ vars.INCLUDE_SEED_KEYWORDS || 'false' }}
-          HOT_ISSUE_COUNT: ${{ vars.HOT_ISSUE_COUNT || '10' }}
-          CARD_NEWS_COUNT: ${{ vars.CARD_NEWS_COUNT || '3' }}
-          ARTICLE_COUNT: ${{ vars.ARTICLE_COUNT || '3' }}
-          TELEGRAM_ONLY: ${{ github.event.inputs.telegram_only || vars.TELEGRAM_ONLY || 'false' }}
-          SEND_ARTICLES_TO_TELEGRAM: ${{ vars.SEND_ARTICLES_TO_TELEGRAM || 'false' }}
-          SEND_ARTICLE_ON_WP_FAIL: "false"
-          # true로 바꾸면 iPhone, GPT 같은 영어 키워드도 허용합니다.
-          ALLOW_ENGLISH_KEYWORDS: "true"
-        run: >
-          python main.py
-          --max-keywords 30
-          --max-posts 10
-          --category-filter "$CATEGORY_FILTER"
-          --lookback-hours "$LOOKBACK_HOURS"
-
-      - name: Upload reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: adsense-seo-reports
-          path: reports/*
-          retention-days: 30
+    return Response.json(
+      {
+        ok: false,
+        error: "test_message_failed",
+        message: safeErrorMessage(error),
+        checkList: [
+          "TELEGRAM_BOT_TOKEN이 BotFather 토큰과 정확히 같은지 확인하세요.",
+          "TELEGRAM_CHAT_ID가 내 채팅방 ID와 맞는지 확인하세요.",
+          "봇에게 먼저 /start를 보냈는지 확인하세요.",
+          "환경변수를 수정했다면 Vercel에서 Redeploy를 다시 실행하세요."
+        ]
+      },
+      { status: 500 }
+    );
+  }
+}
