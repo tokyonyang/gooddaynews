@@ -66,10 +66,10 @@ name: daily-adsense-seo
     # 22:03 KST = 13:03 UTC
     - cron: "57 20 * * *"
     - cron: "15 0 * * *"
-    #  cron: "28 2 * * *"
+    - cron: "28 2 * * *"
     - cron: "7 5 * * *"
-    #  cron: "41 6 * * *"
-    #  cron: "2 11 * * *"
+    - cron: "41 6 * * *"
+    - cron: "2 11 * * *"
     - cron: "3 13 * * *"
 
 permissions:
@@ -110,6 +110,19 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SITE_DESCRIPTION: ${{ vars.SITE_DESCRIPTION }}
           GOOGLE_TRENDS_GEO: KR
+          DEFAULT_REGION: ${{ vars.DEFAULT_REGION || 'KR' }}
+          DEFAULT_LOCALE: ${{ vars.DEFAULT_LOCALE || 'ko-KR' }}
+          DEFAULT_TIMEZONE: ${{ vars.DEFAULT_TIMEZONE || 'Asia/Seoul' }}
+          SUPPORTING_NEWS_MAX_AGE_HOURS: ${{ vars.SUPPORTING_NEWS_MAX_AGE_HOURS || '48' }}
+          EXCLUDE_UNKNOWN_PUBLISHED_AT: ${{ vars.EXCLUDE_UNKNOWN_PUBLISHED_AT || 'true' }}
+          WEATHER_ENABLED: ${{ vars.WEATHER_ENABLED || 'true' }}
+          WEATHER_DEFAULT_CITY: ${{ vars.WEATHER_DEFAULT_CITY || '서울' }}
+          WEATHER_DEFAULT_LAT: ${{ vars.WEATHER_DEFAULT_LAT || '37.5665' }}
+          WEATHER_DEFAULT_LON: ${{ vars.WEATHER_DEFAULT_LON || '126.9780' }}
+          PERSON_KEYWORD_GUARD: ${{ vars.PERSON_KEYWORD_GUARD || 'true' }}
+          PERSON_KEYWORD_MIN_CONTEXT_MATCH: ${{ vars.PERSON_KEYWORD_MIN_CONTEXT_MATCH || '2' }}
+          TELEGRAM_URL_BUTTONS: ${{ vars.TELEGRAM_URL_BUTTONS || 'true' }}
+          TELEGRAM_LINK_BUTTON_LIMIT: ${{ vars.TELEGRAM_LINK_BUTTON_LIMIT || '8' }}
 
           SELECTED_TOPICS: ${{ github.event.inputs.topics || vars.SELECTED_TOPICS || '' }}
           SPECIAL_ISSUES: ${{ github.event.inputs.special_issues || vars.SPECIAL_ISSUES || '' }}
